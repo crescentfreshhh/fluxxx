@@ -88,10 +88,15 @@
   <div class="row"><span class="k">horizon r₊</span><span class="v" id="hHor">–</span></div>
   <div class="row"><span class="k">ISCO</span><span class="v" id="hIsco">–</span></div>
   <div class="sep"></div>
-  <div class="row"><span class="k">time dilation</span><span class="v" id="hDil">–</span></div>
+  <div class="row"><span class="k">dilation dτ/dt</span><span class="v" id="hDil">–</span></div>
+  <div class="row"><span class="k">clock rate</span><span class="v" id="hRate">–</span></div>
+  <div class="row"><span class="k">your clock ⏱</span><span class="v" id="hYou">0.0 s</span></div>
+  <div class="row"><span class="k">distant clock</span><span class="v" id="hFar">0.0 s</span></div>
   <div class="row"><span class="k">grav. redshift</span><span class="v" id="hZ">–</span></div>
+  <div class="sep"></div>
   <div class="row"><span class="k">speed</span><span class="v" id="hSpd">–</span></div>
   <div class="row"><span class="k">region</span><span class="v" id="hZone">exterior</span></div>
+  <div class="row" style="margin-top:5px"><span class="k" style="font-size:10px">press <kbd style="background:rgba(255,255,255,.08);border:1px solid var(--edge);border-radius:4px;padding:0 5px;color:#fff">R</kbd> to reset clocks</span><span class="v" id="hLag" style="font-size:10px"></span></div>
 </div>
 
 <div id="help" class="panel">
@@ -488,6 +493,10 @@ const state = {
 };
 const QSTEPS = [70,120,190,300], QNAME=['Low','Med','High','Ultra'];
 
+// twin-paradox clocks: your accumulated proper time vs. a far observer's time
+let clkYou = 0, clkFar = 0;
+function resetClocks(){ clkYou = 0; clkFar = 0; }
+
 // camera basis from yaw/pitch.  World-up is +Z, the black-hole spin axis, so the
 // equatorial accretion disk (z=0) reads as a horizontal "ground" plane.
 function basis(){
@@ -518,6 +527,7 @@ const keys={};
 addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='Space'){ state.paused=!state.paused; e.preventDefault(); }
+  if(e.code==='KeyR'){ resetClocks(); }
 });
 addEventListener('keyup',e=> keys[e.code]=false);
 
@@ -560,7 +570,7 @@ document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
   const t=c.dataset.t; state.show[t]=!state.show[t]; c.classList.toggle('on',state.show[t]);
 }));
 document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('click',()=>{
-  const p=b.dataset.p;
+  const p=b.dataset.p; resetClocks(); state.teleport=true;   // teleport breaks worldline continuity
   if(p==='eht'){ state.pos=[0.0,-26.0,3.0]; state.yaw=Math.PI/2; state.pitch=-0.10; }
   if(p==='top'){ state.pos=[0.01,0.0,26.0]; state.yaw=Math.PI/2; state.pitch=-1.55; }
   if(p==='plunge'){ state.pos=[0.0,-9.0,1.2]; state.yaw=Math.PI/2; state.pitch=-0.05; state.moveSpeed=1.4; }
@@ -580,6 +590,26 @@ document.getElementById('aboutBody').innerHTML =
 function ksR(p,a){ const a2=a*a, rho2=p[0]*p[0]+p[1]*p[1]+p[2]*p[2], t=rho2-a2;
   return Math.sqrt(0.5*(t+Math.sqrt(Math.max(t*t+4*a2*p[2]*p[2],0)))); }
 function fOf(p,a){ const r=ksR(p,a), r2=r*r; return 2*r2*r/(r2*r2+a*a*p[2]*p[2]+1e-9); }
+function ksL(p,a){ const r=ksR(p,a), inv=1/(r*r+a*a);
+  return [(r*p[0]+a*p[1])*inv, (r*p[1]-a*p[0])*inv, p[2]/r]; }
+// dτ/dt for an observer with coordinate 3-velocity v, in the Kerr–Schild metric:
+// dτ/dt = sqrt(-(g_tt + 2 g_ti v^i + g_ij v^i v^j)),  g_tt=-1+f, g_ti=f l_i, g_ij=δ_ij+f l_i l_j
+function dilationFactor(p,v,a){
+  const f=fOf(p,a), l=ksL(p,a);
+  const lv=l[0]*v[0]+l[1]*v[1]+l[2]*v[2];
+  const vv=v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
+  const S=(-1+f) + 2*f*lv + (vv + f*lv*lv);
+  return S<0 ? Math.sqrt(-S) : 0;   // 0 → not a valid timelike observer here
+}
+function fmtT(s){
+  if(!isFinite(s)) return '∞';
+  if(s<90)      return s.toFixed(1)+' s';
+  if(s<5400)    return (s/60).toFixed(1)+' min';
+  if(s<172800)  return (s/3600).toFixed(2)+' hr';
+  if(s<3.15e7)  return (s/86400).toFixed(2)+' days';
+  if(s<3.15e10) return (s/3.15576e7).toFixed(2)+' yr';
+  return (s/3.15576e10).toFixed(2)+' kyr';
+}
 
 // ---------------- main loop ----------------
 resize();
@@ -597,6 +627,7 @@ function frame(now){
   if(keys['KeyE'])add([0,0,1],1); if(keys['KeyQ'])add([0,0,1],-1);
   const mlen=Math.hypot(mv[0],mv[1],mv[2]);
   if(mlen>1e-4){ for(let i=0;i<3;i++){ state.pos[i]+=mv[i]/mlen*sp*dt; } }
+  if(state.teleport){ prevPos=state.pos.slice(); state.teleport=false; }   // no velocity spike after a jump
   // coordinate velocity (for observer frame / Doppler)
   state.vel=[ (state.pos[0]-prevPos[0])/Math.max(dt,1e-3),
               (state.pos[1]-prevPos[1])/Math.max(dt,1e-3),
@@ -632,7 +663,14 @@ function frame(now){
   const r=ksR(p,a);
   const rHor=1+Math.sqrt(Math.max(1-a*a,0));
   const f=fOf(p,a);
-  const dil = 1-f>0 ? Math.sqrt(1-f) : 0;             // dτ/dt, static observer
+  const fgrav = 1-f>0 ? Math.sqrt(1-f) : 0;           // gravitational-only (static obs)
+  // full dilation including the camera's motion (gravitational + velocity)
+  let D = dilationFactor(p, state.vel, a);
+  if(!(D>0)) D = fgrav;                               // fall back if not timelike (e.g. still, in ergosphere)
+  const Dsafe = Math.max(D, 1e-4);
+  // accumulate clocks: you live in real time; the distant clock races ahead by 1/D
+  clkYou += dt;
+  clkFar += dt / Dsafe;
   const Z1=1+Math.pow(1-a*a,1/3)*(Math.pow(1+a,1/3)+Math.pow(1-a,1/3));
   const Z2=Math.sqrt(3*a*a+Z1*Z1);
   const rIsco=3+Z2-Math.sqrt(Math.max((3-Z1)*(3+Z1+2*Z2),0));
@@ -641,8 +679,15 @@ function frame(now){
   set('hRs',(r/2).toFixed(2));
   set('hHor', rHor.toFixed(2)+' M');
   set('hIsco', rIsco.toFixed(2)+' M');
-  if(1-f>0){ set('hDil', dil.toFixed(3)+'×'); set('hZ', (dil>0?(1/dil-1):Infinity).toFixed(2)); }
-  else { set('hDil','frame-drag','hot'); set('hZ','—','hot'); }
+  const near = D<0.9;                                 // highlight when dilation is significant
+  set('hDil', D>0.0001 ? D.toFixed(4)+'×' : '≈0 (frozen)', D<0.5?'hot':'');
+  set('hRate', '1 : '+ (Dsafe>0? (1/Dsafe).toFixed(2):'∞'), near?'hot':'');
+  set('hYou', fmtT(clkYou));
+  set('hFar', fmtT(clkFar), near?'hot':'');
+  set('hZ', fgrav>0 ? (1/fgrav-1).toFixed(3) : '∞', '');
+  // running "lag": how far the distant universe has pulled ahead of you
+  const lag = clkFar - clkYou;
+  set('hLag', lag>0.5 ? '+'+fmtT(lag)+' ahead' : '', 'hot');
   set('hSpd', state.moveSpeed.toFixed(2)+' c*');
   if(r < rHor){ set('hZone','⚠ INSIDE HORIZON','warn'); }
   else if(f>1){ set('hZone','ergosphere','hot'); }

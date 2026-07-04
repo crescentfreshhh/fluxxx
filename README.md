@@ -24,11 +24,24 @@ use the **quality** slider to trade resolution/steps for framerate on weaker har
 | Boost | hold `Shift` |
 | Change speed | scroll wheel |
 | Pause disk rotation | `Space` |
+| Reset the clocks | `R` |
 | Presets | **EHT view**, **top-down**, **plunge** buttons |
 
 The **HUD** (top-left) reads out your radius in gravitational radii `M` and Schwarzschild radii
-`rₛ`, the horizon and ISCO radii, gravitational time dilation `dτ/dt`, redshift, and your region
-(exterior → ergosphere → **inside the horizon**).
+`rₛ`, the horizon and ISCO radii, redshift, and your region (exterior → ergosphere → **inside the
+horizon**).
+
+### Time-dilation clock (the twin paradox, live)
+
+The HUD runs two clocks side by side: **your clock** (proper time you experience) and a **distant
+clock** (a far-away observer, effectively at infinity). It also shows the instantaneous factor
+`dτ/dt` and the ratio as `1 : X`. The dilation combines **both** effects — gravitational
+(from your depth in the potential) *and* velocity (from how fast you're moving), computed from your
+full 4-velocity in the metric, so orbiting fast deep in the well slows your clock more than either
+effect alone. Hover near the horizon and watch the distant clock — and the "+… ahead" lag — race
+away from you, exactly the effect that ages Miller's-planet an hour-for-seven-years in *Interstellar*.
+Teleporting via a preset resets the clocks (a jump isn't a continuous worldline). Press `R` to reset
+manually.
 
 ## The physics (what's actually being computed)
 
@@ -52,6 +65,8 @@ The **HUD** (top-left) reads out your radius in gravitational radii `M` and Schw
 - **Sky.** A procedural multi-layer starfield + Milky-Way band + a lensed **companion star**, all
   sampled along each ray's *final* (bent) direction — so the background visibly warps and can form
   multiple images as you move.
+- **Time dilation.** `dτ/dt = √(−(g_tt + 2 g_ti vⁱ + g_ij vⁱvʲ))` for your actual 4-velocity —
+  the combined gravitational + kinematic slowdown — accumulated live into your-vs-distant clocks.
 
 Units are geometric: `G = c = M = 1`, distances in gravitational radii.
 
