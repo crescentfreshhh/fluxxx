@@ -141,4 +141,7 @@ export const api = {
     invoke<string>("stream_url", { providerId, streamId, container: container ?? null }),
   launchExternal: (command: string, args: string[]) =>
     invoke<void>("launch_external", { command, args }),
+
+  importProvidersFile: () => invoke<number>("import_providers_file"),
+  exportProvidersFile: () => invoke<string>("export_providers_file"),
 };

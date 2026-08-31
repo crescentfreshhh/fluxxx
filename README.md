@@ -64,6 +64,33 @@ npm run tauri build    # produce exe + installer
 cargo test -p fluxxx-core
 ```
 
+## Preloading providers (credentials file)
+
+Your providers are stored in a local SQLite database in `%APPDATA%\com.fluxxx.player\`
+(passwords encrypted with Windows DPAPI), so they already survive re-downloading the `.exe`
+on the same machine.
+
+For an editable, portable, version-independent setup, drop a **`fluxxx-providers.toml`**
+next to `fluxxx.exe` (or in the app data dir). It's imported on launch — idempotently, so
+it can stay in place and newly appended entries are picked up without duplicates:
+
+```toml
+[[provider]]
+name = "My IPTV"       # optional; defaults to the host
+host = "example.com"   # scheme optional — inferred from port (443/8443 → https)
+port = 443
+username = "user"
+password = "pass"
+enabled = true         # optional; defaults to true
+```
+
+In **Settings → Providers file** you can **Export** your current providers to this file
+(configure once, carry it to future builds) or **Import now**. The add-provider form
+defaults to port **443**.
+
+> The file stores credentials in plaintext by design (that's the point — an editable
+> bootstrap you maintain). Keep it somewhere you trust. The in-app copy stays encrypted.
+
 ## Status
 
 Phase 0 — project scaffold, CI pipeline, and the pure-logic core (Xtream response

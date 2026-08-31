@@ -1,5 +1,6 @@
 // Settings: choose the playback backend (in-app hls.js / VLC / custom external)
 // and control the Go-Live window (size presets, borderless, always-on-top).
+import { api } from "../api";
 import {
   getPlaybackConfig,
   setPlaybackConfig,
@@ -34,6 +35,19 @@ function draw(borderless: boolean, onTop: boolean): void {
 
         ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.externalContainer) : ""}
         ${cfg.backend === "external" ? externalFields(cfg.externalCommand, cfg.externalContainer) : ""}
+      </section>
+
+      <section class="panel">
+        <h3>Providers file</h3>
+        <p class="muted">Keep a <code>fluxxx-providers.toml</code> next to the app to preload
+          providers on launch — so a freshly downloaded build picks them up automatically.
+          Export writes your current providers to that file; it stores credentials in
+          <strong>plaintext</strong> (the in-app copy stays encrypted).</p>
+        <div class="golive-row">
+          <button class="btn btn-primary" data-file="export">Export providers to file</button>
+          <button class="btn" data-file="import">Import now</button>
+          <span class="form-status" data-el="file-status"></span>
+        </div>
       </section>
 
       <section class="panel">
@@ -132,6 +146,33 @@ function wire(): void {
   root.querySelector<HTMLInputElement>('[data-win="ontop"]')?.addEventListener("change", (e) => {
     void setAlwaysOnTop((e.target as HTMLInputElement).checked);
   });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-file]").forEach((b) =>
+    b.addEventListener("click", () => void onFileAction(b.dataset.file!)),
+  );
+}
+
+async function onFileAction(action: string): Promise<void> {
+  const status = root.querySelector<HTMLElement>('[data-el="file-status"]');
+  const setMsg = (msg: string, kind: "ok" | "err" | "busy") => {
+    if (status) {
+      status.textContent = msg;
+      status.className = `form-status ${kind}`;
+    }
+  };
+  try {
+    if (action === "export") {
+      setMsg("Writing…", "busy");
+      const path = await api.exportProvidersFile();
+      setMsg(`Saved to ${path}`, "ok");
+    } else {
+      setMsg("Importing…", "busy");
+      const n = await api.importProvidersFile();
+      setMsg(n > 0 ? `Imported ${n} provider(s)` : "No new providers found", "ok");
+    }
+  } catch (e) {
+    setMsg(String(e), "err");
+  }
 }
 
 function esc(s: string): string {

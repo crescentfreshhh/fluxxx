@@ -31,15 +31,7 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
-/// Ensure the host carries a scheme and no trailing slash.
-fn normalize_host(input: &str) -> String {
-    let trimmed = input.trim().trim_end_matches('/');
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        trimmed.to_string()
-    } else {
-        format!("http://{trimmed}")
-    }
-}
+use fluxxx_core::xtream::normalize_base;
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -172,7 +164,7 @@ pub fn add_provider(
     let enc = crypto::encrypt(input.password.as_bytes())?;
     let new = NewProvider {
         name: input.name.trim().to_string(),
-        host: normalize_host(&input.host),
+        host: normalize_base(&input.host, input.port),
         port: input.port,
         username: input.username.trim().to_string(),
         password_enc: enc,
@@ -210,7 +202,7 @@ pub async fn test_connection(
     input: AddProviderInput,
 ) -> CmdResult<TestResult> {
     let creds = Creds {
-        base_url: format!("{}:{}", normalize_host(&input.host), input.port),
+        base_url: format!("{}:{}", normalize_base(&input.host, input.port), input.port),
         username: input.username.trim().to_string(),
         password: input.password.clone(),
     };
@@ -545,6 +537,37 @@ pub fn launch_external(command: String, args: Vec<String>) -> CmdResult<()> {
         .spawn()
         .map_err(|e| format!("Failed to launch '{command}': {e}"))?;
     Ok(())
+}
+
+// --- credentials file (import / export) --------------------------------------
+
+fn app_data_dir(app: &tauri::AppHandle) -> CmdResult<std::path::PathBuf> {
+    use tauri::Manager;
+    app.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+/// Re-run the credentials-file import on demand. Returns how many new providers
+/// were added.
+#[tauri::command]
+pub fn import_providers_file(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> CmdResult<usize> {
+    let dir = app_data_dir(&app)?;
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    crate::config_import::import_from_file(&conn, &dir)
+}
+
+/// Write all current providers to the credentials file. Returns the path written.
+#[tauri::command]
+pub fn export_providers_file(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> CmdResult<String> {
+    let dir = app_data_dir(&app)?;
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    let path = crate::config_import::export_to_file(&conn, &dir)?;
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]

@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod config_import;
 mod crypto;
 mod state;
 
@@ -37,6 +38,15 @@ fn main() {
             let db_path = dir.join("fluxxx.db");
             let conn = fluxxx_core::db::open(db_path.to_str().expect("db path not utf-8"))
                 .expect("failed to open database");
+
+            // Preload providers from an optional credentials file next to the exe
+            // (or in the app data dir). Idempotent and best-effort.
+            match config_import::import_from_file(&conn, &dir) {
+                Ok(0) => {}
+                Ok(n) => eprintln!("fluxxx: imported {n} provider(s) from credentials file"),
+                Err(e) => eprintln!("fluxxx: credentials-file import failed: {e}"),
+            }
+
             app.manage(AppState {
                 db: Mutex::new(conn),
                 fetcher: ReqwestFetcher::new(),
@@ -67,6 +77,8 @@ fn main() {
             commands::get_epg,
             commands::stream_url,
             commands::launch_external,
+            commands::import_providers_file,
+            commands::export_providers_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running fluxxx");

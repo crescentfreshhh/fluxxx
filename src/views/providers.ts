@@ -78,7 +78,7 @@ function addForm(): string {
       </div>
       <div class="row">
         <label class="grow">Host<input name="host" placeholder="http://example.com" required /></label>
-        <label class="port">Port<input name="port" type="number" value="80" min="1" max="65535" required /></label>
+        <label class="port">Port<input name="port" type="number" value="443" min="1" max="65535" required /></label>
       </div>
       <div class="row">
         <label class="grow">Username<input name="username" autocomplete="off" required /></label>

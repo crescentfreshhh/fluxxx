@@ -9,6 +9,7 @@
 //!   * [`curation`]— decide what is "enabled" and therefore fetched/cached.
 
 pub mod client;
+pub mod config;
 pub mod country;
 pub mod curation;
 pub mod db;

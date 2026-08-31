@@ -81,6 +81,21 @@ pub fn player_api_url(
     url
 }
 
+/// Normalize a user-entered host into scheme + host (no trailing slash, no port).
+///
+/// If the host already carries an `http(s)://` scheme it is kept as-is; otherwise
+/// the scheme is inferred from the port — `https` for 443/8443, `http` otherwise.
+/// Callers append `:{port}` themselves to form the base URL.
+pub fn normalize_base(host: &str, port: u16) -> String {
+    let trimmed = host.trim().trim_end_matches('/');
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        let scheme = if port == 443 || port == 8443 { "https" } else { "http" };
+        format!("{scheme}://{trimmed}")
+    }
+}
+
 /// Build the live stream playback URL.
 ///
 /// `container` is the extension without a dot, typically `ts` or `m3u8`.
@@ -348,6 +363,17 @@ mod tests {
     fn builds_stream_url() {
         let u = stream_url("http://h:8080", "u", "p", 12345, "ts");
         assert_eq!(u, "http://h:8080/live/u/p/12345.ts");
+    }
+
+    #[test]
+    fn normalize_base_infers_scheme() {
+        assert_eq!(normalize_base("example.com", 443), "https://example.com");
+        assert_eq!(normalize_base("example.com", 8443), "https://example.com");
+        assert_eq!(normalize_base("example.com", 80), "http://example.com");
+        assert_eq!(normalize_base("example.com/", 8080), "http://example.com");
+        // Explicit scheme is preserved regardless of port.
+        assert_eq!(normalize_base("http://example.com", 443), "http://example.com");
+        assert_eq!(normalize_base("https://example.com/", 80), "https://example.com");
     }
 
     #[test]
