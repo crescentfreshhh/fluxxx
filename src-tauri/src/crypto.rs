@@ -21,7 +21,14 @@ mod imp {
     use windows_sys::Win32::Security::Cryptography::{
         CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
     };
-    use windows_sys::Win32::System::Memory::LocalFree;
+
+    // DPAPI allocates its output buffer with LocalAlloc, so it must be released
+    // with LocalFree (kernel32, always linked on Windows). Declared directly to
+    // avoid depending on its exact module path in windows-sys.
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LocalFree(hmem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
+    }
 
     /// Copy an output DPAPI blob into an owned `Vec` and release the OS buffer.
     unsafe fn take_blob(out: CRYPT_INTEGER_BLOB) -> Vec<u8> {
