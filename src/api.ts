@@ -62,6 +62,27 @@ export interface CurationStats {
   enabled_channels: number;
 }
 
+export interface Channel {
+  id: number;
+  provider_id: number;
+  provider_name: string;
+  stream_id: number;
+  name: string;
+  category_name: string | null;
+  country_code: string | null;
+  epg_channel_id: string | null;
+  logo: string | null;
+  num: number | null;
+  favorite: boolean;
+}
+
+export interface ChannelQueryOpts {
+  providerId?: number | null;
+  search?: string | null;
+  favoritesOnly?: boolean;
+  limit?: number;
+}
+
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
 
@@ -83,4 +104,19 @@ export const api = {
     invoke<void>("set_category_enabled", { categoryId, enabled }),
   setAllCategoriesEnabled: (providerId: number, enabled: boolean) =>
     invoke<number>("set_all_categories_enabled", { providerId, enabled }),
+
+  listChannels: (opts: ChannelQueryOpts = {}) =>
+    invoke<Channel[]>("list_channels", {
+      providerId: opts.providerId ?? null,
+      search: opts.search ?? null,
+      favoritesOnly: opts.favoritesOnly ?? false,
+      limit: opts.limit ?? null,
+    }),
+  listRecent: (limit = 20) => invoke<Channel[]>("list_recent", { limit }),
+  setFavorite: (providerId: number, streamId: number, favorite: boolean) =>
+    invoke<void>("set_favorite", { providerId, streamId, favorite }),
+  recordRecent: (providerId: number, streamId: number) =>
+    invoke<void>("record_recent", { providerId, streamId }),
+  getSetting: (key: string) => invoke<string | null>("get_setting", { key }),
+  setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
 };

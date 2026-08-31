@@ -57,6 +57,12 @@ fn main() {
             commands::set_category_enabled,
             commands::set_all_categories_enabled,
             commands::set_country_enabled,
+            commands::list_channels,
+            commands::list_recent,
+            commands::set_favorite,
+            commands::record_recent,
+            commands::get_setting,
+            commands::set_setting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running fluxxx");

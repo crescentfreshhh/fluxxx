@@ -343,3 +343,66 @@ pub fn curation_stats(
     let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
     db::curation_stats(&conn, provider_id).map_err(|e| e.to_string())
 }
+
+// --- channels: browse, favorites, recent, resume -----------------------------
+
+#[tauri::command]
+pub fn list_channels(
+    state: tauri::State<'_, AppState>,
+    provider_id: Option<i64>,
+    search: Option<String>,
+    favorites_only: bool,
+    limit: Option<i64>,
+) -> CmdResult<Vec<db::ChannelRow>> {
+    let query = db::ChannelQuery {
+        provider_id,
+        search,
+        favorites_only,
+        limit: limit.unwrap_or(500),
+        offset: 0,
+    };
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::list_channels(&conn, &query).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_recent(
+    state: tauri::State<'_, AppState>,
+    limit: Option<i64>,
+) -> CmdResult<Vec<db::ChannelRow>> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::list_recent(&conn, limit.unwrap_or(20)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_favorite(
+    state: tauri::State<'_, AppState>,
+    provider_id: i64,
+    stream_id: i64,
+    favorite: bool,
+) -> CmdResult<()> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::set_favorite(&conn, provider_id, stream_id, favorite, now()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn record_recent(
+    state: tauri::State<'_, AppState>,
+    provider_id: i64,
+    stream_id: i64,
+) -> CmdResult<()> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::record_recent(&conn, provider_id, stream_id, now()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_setting(state: tauri::State<'_, AppState>, key: String) -> CmdResult<Option<String>> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::get_setting(&conn, &key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_setting(state: tauri::State<'_, AppState>, key: String, value: String) -> CmdResult<()> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::set_setting(&conn, &key, &value).map_err(|e| e.to_string())
+}

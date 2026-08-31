@@ -7,7 +7,7 @@
 //! Re-syncing a provider preserves user curation: existing categories keep their
 //! `enabled` flag; only new categories default to enabled.
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 
 use crate::xtream::{XtreamCategory, XtreamStream};
 
@@ -111,6 +111,20 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
         CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS favorites (
+            provider_id INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+            stream_id   INTEGER NOT NULL,
+            created_at  INTEGER NOT NULL,
+            PRIMARY KEY (provider_id, stream_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS recent (
+            provider_id      INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+            stream_id        INTEGER NOT NULL,
+            last_watched_utc INTEGER NOT NULL,
+            PRIMARY KEY (provider_id, stream_id)
         );
         "#,
     )?;
@@ -432,6 +446,156 @@ pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>> {
     .optional()
 }
 
+// --- channels: browsing, favorites, recent -----------------------------------
+
+/// A channel row enriched for browsing (provider + category names, favorite).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ChannelRow {
+    pub id: i64,
+    pub provider_id: i64,
+    pub provider_name: String,
+    pub stream_id: i64,
+    pub name: String,
+    pub category_name: Option<String>,
+    pub country_code: Option<String>,
+    pub epg_channel_id: Option<String>,
+    pub logo: Option<String>,
+    pub num: Option<i64>,
+    pub favorite: bool,
+}
+
+/// Filters for [`list_channels`]. Only "active" channels are returned — those on
+/// an enabled provider whose category is enabled (or absent).
+#[derive(Debug, Clone, Default)]
+pub struct ChannelQuery {
+    pub provider_id: Option<i64>,
+    pub search: Option<String>,
+    pub favorites_only: bool,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+fn map_channel_row(row: &rusqlite::Row) -> Result<ChannelRow> {
+    Ok(ChannelRow {
+        id: row.get("id")?,
+        provider_id: row.get("provider_id")?,
+        provider_name: row.get("provider_name")?,
+        stream_id: row.get("stream_id")?,
+        name: row.get("name")?,
+        category_name: row.get("category_name")?,
+        country_code: row.get("country_code")?,
+        epg_channel_id: row.get("epg_channel_id")?,
+        logo: row.get("logo")?,
+        num: row.get("num")?,
+        favorite: row.get::<_, i64>("favorite")? != 0,
+    })
+}
+
+const CHANNEL_SELECT: &str = "
+    SELECT ch.id, ch.provider_id, p.name AS provider_name, ch.stream_id, ch.name,
+           c.name AS category_name, c.country_code, ch.epg_channel_id, ch.logo, ch.num,
+           EXISTS(SELECT 1 FROM favorites f
+                  WHERE f.provider_id = ch.provider_id AND f.stream_id = ch.stream_id) AS favorite
+    FROM channels ch
+    JOIN providers p ON p.id = ch.provider_id AND p.enabled = 1
+    LEFT JOIN categories c ON c.id = ch.category_id
+    WHERE (ch.category_id IS NULL OR c.enabled = 1)";
+
+/// List active channels matching the query, ordered by provider then channel
+/// number/name. `limit` <= 0 means no limit.
+pub fn list_channels(conn: &Connection, query: &ChannelQuery) -> Result<Vec<ChannelRow>> {
+    let mut sql = String::from(CHANNEL_SELECT);
+    let mut args: Vec<Value> = Vec::new();
+
+    if let Some(pid) = query.provider_id {
+        sql.push_str(" AND ch.provider_id = ?");
+        args.push(Value::Integer(pid));
+    }
+    if let Some(s) = query.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        sql.push_str(" AND ch.name LIKE ? ESCAPE '\\'");
+        args.push(Value::Text(format!("%{}%", escape_like(s))));
+    }
+    if query.favorites_only {
+        sql.push_str(
+            " AND EXISTS(SELECT 1 FROM favorites f2
+                         WHERE f2.provider_id = ch.provider_id AND f2.stream_id = ch.stream_id)",
+        );
+    }
+    sql.push_str(" ORDER BY p.name COLLATE NOCASE, ch.num IS NULL, ch.num, ch.name COLLATE NOCASE");
+    if query.limit > 0 {
+        sql.push_str(" LIMIT ? OFFSET ?");
+        args.push(Value::Integer(query.limit));
+        args.push(Value::Integer(query.offset.max(0)));
+    }
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params_from_iter(args.iter()), map_channel_row)?;
+    rows.collect()
+}
+
+/// Escape `%`, `_`, and `\` for a LIKE pattern (paired with `ESCAPE '\'`).
+fn escape_like(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if matches!(ch, '%' | '_' | '\\') {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+pub fn set_favorite(
+    conn: &Connection,
+    provider_id: i64,
+    stream_id: i64,
+    favorite: bool,
+    now: i64,
+) -> Result<()> {
+    if favorite {
+        conn.execute(
+            "INSERT OR IGNORE INTO favorites (provider_id, stream_id, created_at)
+             VALUES (?1, ?2, ?3)",
+            params![provider_id, stream_id, now],
+        )?;
+    } else {
+        conn.execute(
+            "DELETE FROM favorites WHERE provider_id = ?1 AND stream_id = ?2",
+            params![provider_id, stream_id],
+        )?;
+    }
+    Ok(())
+}
+
+/// Record a channel as recently watched (upserting the timestamp).
+pub fn record_recent(
+    conn: &Connection,
+    provider_id: i64,
+    stream_id: i64,
+    now: i64,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO recent (provider_id, stream_id, last_watched_utc) VALUES (?1, ?2, ?3)
+         ON CONFLICT(provider_id, stream_id) DO UPDATE SET last_watched_utc = excluded.last_watched_utc",
+        params![provider_id, stream_id, now],
+    )?;
+    Ok(())
+}
+
+/// Most-recently-watched active channels, newest first.
+pub fn list_recent(conn: &Connection, limit: i64) -> Result<Vec<ChannelRow>> {
+    let sql = format!(
+        "{CHANNEL_SELECT}
+         AND EXISTS(SELECT 1 FROM recent r WHERE r.provider_id = ch.provider_id AND r.stream_id = ch.stream_id)
+         ORDER BY (SELECT r.last_watched_utc FROM recent r
+                   WHERE r.provider_id = ch.provider_id AND r.stream_id = ch.stream_id) DESC
+         LIMIT ?"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![limit.max(0)], map_channel_row)?;
+    rows.collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -592,6 +756,91 @@ mod tests {
         let s = curation_stats(&conn, pid).unwrap();
         assert_eq!(s.enabled_categories, 0);
         assert_eq!(s.enabled_channels, 1); // only the uncategorized one
+    }
+
+    #[test]
+    fn list_channels_respects_curation_and_favorites() {
+        let mut conn = open_in_memory().unwrap();
+        let pid = insert_provider(&conn, &new_provider()).unwrap();
+        apply_catalog(
+            &mut conn,
+            pid,
+            &[cat("1", "UK | Sports"), cat("2", "US | News")],
+            &[
+                stream(100, "Sky Sports", Some("1"), Some("sky.uk")),
+                stream(101, "CNN", Some("2"), Some("cnn.us")),
+                stream(102, "Freebie", None, None),
+            ],
+        )
+        .unwrap();
+
+        // All three active initially.
+        let all = list_channels(&conn, &ChannelQuery::default()).unwrap();
+        assert_eq!(all.len(), 3);
+
+        // Disable the US category -> CNN drops out.
+        let us_id = list_categories(&conn, pid)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.country_code.as_deref() == Some("US"))
+            .unwrap()
+            .id;
+        set_category_enabled(&conn, us_id, false).unwrap();
+        let active = list_channels(&conn, &ChannelQuery::default()).unwrap();
+        assert_eq!(active.len(), 2);
+        assert!(active.iter().all(|c| c.name != "CNN"));
+
+        // Search.
+        let found = list_channels(
+            &conn,
+            &ChannelQuery {
+                search: Some("sky".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "Sky Sports");
+        assert!(!found[0].favorite);
+
+        // Favorite Sky, then favorites-only.
+        set_favorite(&conn, pid, 100, true, 10).unwrap();
+        let favs = list_channels(
+            &conn,
+            &ChannelQuery {
+                favorites_only: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(favs.len(), 1);
+        assert!(favs[0].favorite);
+
+        // Provider disabled -> nothing active.
+        set_provider_enabled(&conn, pid, false).unwrap();
+        assert!(list_channels(&conn, &ChannelQuery::default()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn recent_orders_newest_first() {
+        let mut conn = open_in_memory().unwrap();
+        let pid = insert_provider(&conn, &new_provider()).unwrap();
+        apply_catalog(
+            &mut conn,
+            pid,
+            &[cat("1", "UK | Sports")],
+            &[stream(100, "A", Some("1"), None), stream(101, "B", Some("1"), None)],
+        )
+        .unwrap();
+
+        record_recent(&conn, pid, 100, 500).unwrap();
+        record_recent(&conn, pid, 101, 900).unwrap();
+        record_recent(&conn, pid, 100, 1000).unwrap(); // A watched again, newest
+
+        let recent = list_recent(&conn, 10).unwrap();
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].stream_id, 100); // most recent
+        assert_eq!(recent[1].stream_id, 101);
     }
 
     #[test]

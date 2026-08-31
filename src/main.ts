@@ -1,14 +1,12 @@
 import { api } from "./api";
 import { renderProviders } from "./views/providers";
+import { renderLive } from "./views/live";
 import "./styles.css";
 
 type ViewFn = (root: HTMLElement) => void | Promise<void>;
 
 const views: Record<string, ViewFn> = {
-  live: placeholder(
-    "Live TV",
-    "Channels will appear here once you add and sync a provider. Playback lands in a later build.",
-  ),
+  live: (root) => renderLive(root),
   guide: placeholder("Guide", "The full EPG timeline grid is coming in a later build."),
   providers: (root) => renderProviders(root),
   settings: placeholder("Settings", "Settings will arrive alongside EPG and playback."),
@@ -63,5 +61,5 @@ async function showVersion(): Promise<void> {
 window.addEventListener("DOMContentLoaded", () => {
   void showVersion();
   wireNav();
-  void activate("providers");
+  void activate("live");
 });

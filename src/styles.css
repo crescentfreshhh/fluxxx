@@ -601,6 +601,174 @@ body {
   white-space: nowrap;
 }
 
+/* Live TV */
+.live {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.live-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.live-search {
+  flex: 1;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.empty,
+.cap-note {
+  padding: 20px 4px;
+}
+
+.recent-strip {
+  margin-bottom: 20px;
+}
+
+.strip-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.strip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.recent-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px 6px 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.recent-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-chip:hover {
+  border-color: var(--accent);
+}
+
+.chan-group {
+  margin-bottom: 20px;
+}
+
+.chan-group-head {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 6px 4px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.chan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chan-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.chan-row:hover {
+  background: var(--bg-elev);
+}
+
+.chan-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: var(--bg-elev);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.chan-logo.placeholder {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chan-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.chan-name {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chan-num {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg-elev);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.chan-meta {
+  font-size: 12px;
+}
+
+.fav-star {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.fav-star.on {
+  color: #f5c518;
+}
+
 /* Toast */
 .toast {
   position: fixed;
