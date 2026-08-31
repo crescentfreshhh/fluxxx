@@ -8,10 +8,17 @@
 //!   * [`country`] — infer a country from an IPTV category name (for roll-ups).
 //!   * [`curation`]— decide what is "enabled" and therefore fetched/cached.
 
+pub mod client;
 pub mod country;
 pub mod curation;
+pub mod db;
+pub mod http;
 pub mod model;
 pub mod xtream;
 
 pub use country::{infer_country, Country};
 pub use model::{Category, Channel, EpgProgram, Provider};
+
+// Re-exported so the app crate can name the connection type without depending on
+// rusqlite directly (feature unification keeps the `bundled` SQLite).
+pub use rusqlite;

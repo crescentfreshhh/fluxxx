@@ -233,3 +233,262 @@ body {
 .probe-result.miss {
   color: var(--muted);
 }
+
+/* Stage becomes a scrollable, top-aligned container for views. */
+.stage {
+  display: block;
+  place-items: initial;
+}
+
+/* Providers view */
+.providers {
+  max-width: 780px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.panel h3 {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.provider-card.is-selected {
+  border-color: var(--accent);
+}
+
+.provider-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.provider-name {
+  font-weight: 600;
+}
+
+.provider-sub {
+  font-size: 12px;
+}
+
+.provider-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Buttons */
+.btn {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(160deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--err);
+  color: var(--err);
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: #33354a;
+  border-radius: 999px;
+  transition: 0.15s;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.15s;
+}
+
+.switch input:checked + .slider {
+  background: var(--accent);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(16px);
+}
+
+/* Add form */
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-form .row {
+  display: flex;
+  gap: 12px;
+}
+
+.add-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  flex: 1;
+}
+
+.add-form label.grow {
+  flex: 1;
+}
+
+.add-form label.port {
+  flex: 0 0 90px;
+}
+
+.add-form input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 14px;
+}
+
+.add-form .row.actions {
+  align-items: center;
+  gap: 10px;
+}
+
+.form-status {
+  font-size: 13px;
+}
+.form-status.ok {
+  color: var(--ok);
+}
+.form-status.err {
+  color: var(--err);
+}
+.form-status.busy {
+  color: var(--muted);
+}
+
+/* Curation */
+.country-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.country-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.country-row:hover {
+  background: var(--bg);
+}
+
+.country-name {
+  font-weight: 500;
+  min-width: 150px;
+}
+
+.country-count {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translate(-50%, 20px);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 18px;
+  font-size: 13px;
+  opacity: 0;
+  transition: 0.25s;
+  z-index: 50;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast.ok {
+  border-left: 3px solid var(--ok);
+}
+.toast.err {
+  border-left: 3px solid var(--err);
+}
