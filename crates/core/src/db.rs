@@ -9,7 +9,7 @@
 
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 
-use crate::xtream::{XtreamCategory, XtreamStream};
+use crate::xtream::{XtreamCategory, XtreamEpgEntry, XtreamStream};
 
 /// A stored provider row. `password_enc` is opaque ciphertext.
 #[derive(Debug, Clone)]
@@ -126,6 +126,19 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             last_watched_utc INTEGER NOT NULL,
             PRIMARY KEY (provider_id, stream_id)
         );
+
+        CREATE TABLE IF NOT EXISTS epg_programs (
+            provider_id INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+            stream_id   INTEGER NOT NULL,
+            start_utc   INTEGER NOT NULL,
+            stop_utc    INTEGER NOT NULL,
+            title       TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (provider_id, stream_id, start_utc)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_epg_window
+            ON epg_programs(provider_id, stream_id, start_utc, stop_utc);
         "#,
     )?;
     Ok(())
@@ -596,6 +609,87 @@ pub fn list_recent(conn: &Connection, limit: i64) -> Result<Vec<ChannelRow>> {
     rows.collect()
 }
 
+// --- EPG ---------------------------------------------------------------------
+
+/// A cached EPG programme for the grid (times are UTC unix seconds).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct EpgProgramRow {
+    pub stream_id: i64,
+    pub start_utc: i64,
+    pub stop_utc: i64,
+    pub title: String,
+    pub description: String,
+}
+
+/// Replace cached EPG for the given streams in one transaction. Each tuple is a
+/// stream id and its fresh programme list; the stream's old rows are cleared
+/// first. Returns the total number of programmes written.
+pub fn replace_epg_for_streams(
+    conn: &mut Connection,
+    provider_id: i64,
+    data: &[(i64, Vec<XtreamEpgEntry>)],
+) -> Result<usize> {
+    let tx = conn.transaction()?;
+    let mut total = 0usize;
+    for (stream_id, entries) in data {
+        tx.execute(
+            "DELETE FROM epg_programs WHERE provider_id = ?1 AND stream_id = ?2",
+            params![provider_id, stream_id],
+        )?;
+        for e in entries {
+            tx.execute(
+                "INSERT OR REPLACE INTO epg_programs
+                 (provider_id, stream_id, start_utc, stop_utc, title, description)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![provider_id, stream_id, e.start_utc, e.stop_utc, e.title, e.description],
+            )?;
+            total += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+/// Programmes overlapping the window `[from, to)` for a provider's active
+/// channels (enabled provider + enabled/absent category), ordered for the grid.
+pub fn get_epg_window(
+    conn: &Connection,
+    provider_id: i64,
+    from: i64,
+    to: i64,
+) -> Result<Vec<EpgProgramRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT e.stream_id, e.start_utc, e.stop_utc, e.title, e.description
+         FROM epg_programs e
+         JOIN channels ch ON ch.provider_id = e.provider_id AND ch.stream_id = e.stream_id
+         JOIN providers p ON p.id = ch.provider_id AND p.enabled = 1
+         LEFT JOIN categories c ON c.id = ch.category_id
+         WHERE e.provider_id = ?1
+           AND (ch.category_id IS NULL OR c.enabled = 1)
+           AND e.stop_utc > ?2 AND e.start_utc < ?3
+         ORDER BY e.stream_id, e.start_utc",
+    )?;
+    let rows = stmt.query_map(params![provider_id, from, to], |row| {
+        Ok(EpgProgramRow {
+            stream_id: row.get("stream_id")?,
+            start_utc: row.get("start_utc")?,
+            stop_utc: row.get("stop_utc")?,
+            title: row.get("title")?,
+            description: row.get("description")?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// Count cached EPG programmes for a provider (diagnostics / UI).
+pub fn epg_program_count(conn: &Connection, provider_id: i64) -> Result<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM epg_programs WHERE provider_id = ?1",
+        params![provider_id],
+        |r| r.get(0),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -841,6 +935,67 @@ mod tests {
         assert_eq!(recent.len(), 2);
         assert_eq!(recent[0].stream_id, 100); // most recent
         assert_eq!(recent[1].stream_id, 101);
+    }
+
+    #[test]
+    fn epg_replace_and_window() {
+        let mut conn = open_in_memory().unwrap();
+        let pid = insert_provider(&conn, &new_provider()).unwrap();
+        apply_catalog(
+            &mut conn,
+            pid,
+            &[cat("1", "UK | Sports"), cat("2", "US | News")],
+            &[
+                stream(100, "A", Some("1"), Some("a.uk")),
+                stream(101, "B", Some("2"), Some("b.us")),
+            ],
+        )
+        .unwrap();
+
+        let epg = |start: i64, stop: i64, t: &str| XtreamEpgEntry {
+            start_utc: start,
+            stop_utc: stop,
+            title: t.into(),
+            description: String::new(),
+            channel_id: None,
+        };
+        let written = replace_epg_for_streams(
+            &mut conn,
+            pid,
+            &[
+                (100, vec![epg(1000, 2000, "A1"), epg(2000, 3000, "A2")]),
+                (101, vec![epg(1500, 2500, "B1")]),
+            ],
+        )
+        .unwrap();
+        assert_eq!(written, 3);
+        assert_eq!(epg_program_count(&conn, pid).unwrap(), 3);
+
+        // Window [1800, 2200) overlaps A1, A2, B1.
+        let w = get_epg_window(&conn, pid, 1800, 2200).unwrap();
+        assert_eq!(w.len(), 3);
+
+        // Window [2600, 3000) overlaps only A2.
+        let w = get_epg_window(&conn, pid, 2600, 3000).unwrap();
+        assert_eq!(w.len(), 1);
+        assert_eq!(w[0].title, "A2");
+
+        // Disable US category -> B's EPG excluded from the window.
+        let us = list_categories(&conn, pid)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.country_code.as_deref() == Some("US"))
+            .unwrap()
+            .id;
+        set_category_enabled(&conn, us, false).unwrap();
+        let w = get_epg_window(&conn, pid, 1800, 2200).unwrap();
+        assert!(w.iter().all(|p| p.stream_id != 101));
+
+        // Re-replacing a stream's EPG clears the old rows.
+        replace_epg_for_streams(&mut conn, pid, &[(100, vec![epg(5000, 6000, "A-new")])]).unwrap();
+        let all = get_epg_window(&conn, pid, 0, 100000).unwrap();
+        let a_titles: Vec<_> = all.iter().filter(|p| p.stream_id == 100).map(|p| &p.title).collect();
+        assert_eq!(a_titles, vec!["A-new"]);
     }
 
     #[test]

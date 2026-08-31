@@ -1,15 +1,16 @@
 import { api } from "./api";
 import { renderProviders } from "./views/providers";
 import { renderLive } from "./views/live";
+import { renderGuide } from "./views/guide";
 import "./styles.css";
 
 type ViewFn = (root: HTMLElement) => void | Promise<void>;
 
 const views: Record<string, ViewFn> = {
   live: (root) => renderLive(root),
-  guide: placeholder("Guide", "The full EPG timeline grid is coming in a later build."),
+  guide: (root) => renderGuide(root),
   providers: (root) => renderProviders(root),
-  settings: placeholder("Settings", "Settings will arrive alongside EPG and playback."),
+  settings: placeholder("Settings", "Settings will arrive alongside playback."),
 };
 
 function placeholder(title: string, body: string): ViewFn {

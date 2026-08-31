@@ -769,6 +769,153 @@ body {
   color: #f5c518;
 }
 
+/* Guide (EPG grid) */
+.guide {
+  height: calc(100vh - 118px);
+  display: flex;
+  flex-direction: column;
+}
+
+.guide-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.prov-select {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.epg-progress {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.guide-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  grid-template-rows: 34px 1fr;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.guide-corner {
+  background: var(--bg-side);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-timerow-wrap {
+  overflow: hidden;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.guide-timerow {
+  position: relative;
+  height: 100%;
+}
+
+.time-tick {
+  position: absolute;
+  top: 9px;
+  font-size: 11px;
+  color: var(--muted);
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+  height: 25px;
+}
+
+.guide-channels {
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--bg-side);
+}
+
+.guide-chan {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.guide-lanes-wrap {
+  overflow: auto;
+  position: relative;
+}
+
+.guide-lanes {
+  position: relative;
+}
+
+.guide-lane {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
+.prog {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.prog:hover {
+  border-color: var(--accent);
+}
+
+.prog-title {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent-2);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.prog-detail {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.pd-desc {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
 /* Toast */
 .toast {
   position: fixed;

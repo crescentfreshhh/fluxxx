@@ -4,16 +4,23 @@
 //! Network calls (test/sync) fetch first, then take the DB lock for a short
 //! synchronous write — the `Mutex<Connection>` guard never crosses an `.await`.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use fluxxx_core::client::{self, Creds};
 use fluxxx_core::curation::{self, CountryGroup};
 use fluxxx_core::db::{self, CategoryRow, NewProvider, ProviderRow};
 use fluxxx_core::model::Category;
+use fluxxx_core::xtream::XtreamEpgEntry;
+use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 
 use crate::crypto;
 use crate::state::AppState;
+
+/// Max concurrent EPG requests in flight during a sync.
+const EPG_CONCURRENCY: usize = 12;
 
 type CmdResult<T> = Result<T, String>;
 
@@ -399,6 +406,105 @@ pub fn record_recent(
 pub fn get_setting(state: tauri::State<'_, AppState>, key: String) -> CmdResult<Option<String>> {
     let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
     db::get_setting(&conn, &key).map_err(|e| e.to_string())
+}
+
+// --- EPG ---------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct EpgSyncResult {
+    pub channels_fetched: usize,
+    pub programs: usize,
+}
+
+#[derive(Serialize, Clone)]
+struct EpgProgress {
+    done: usize,
+    total: usize,
+}
+
+/// Fetch EPG for a provider's active channels (curation-gated) with bounded
+/// concurrency, emitting `epg-progress` events, then replace the cache. Only
+/// channels that carry an `epg_channel_id` are fetched — the rest have no guide.
+#[tauri::command]
+pub async fn sync_epg(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    provider_id: i64,
+) -> CmdResult<EpgSyncResult> {
+    // 1) Creds + the active channels worth fetching (short lock).
+    let (creds, channels): (Creds, Vec<i64>) = {
+        let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+        let row = db::get_provider(&conn, provider_id)
+            .map_err(|e| e.to_string())?
+            .ok_or("provider not found")?;
+        let creds = creds_from_row(&row)?;
+        let chans = db::list_channels(
+            &conn,
+            &db::ChannelQuery {
+                provider_id: Some(provider_id),
+                limit: 0,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        let ids = chans
+            .into_iter()
+            .filter(|c| c.epg_channel_id.as_deref().map(|s| !s.is_empty()).unwrap_or(false))
+            .map(|c| c.stream_id)
+            .collect();
+        (creds, ids)
+    };
+
+    let total = channels.len();
+    let done = AtomicUsize::new(0);
+
+    // 2) Concurrent fetch (no lock held). buffer_unordered keeps N in flight.
+    let results: Vec<(i64, Vec<XtreamEpgEntry>)> = stream::iter(channels.into_iter())
+        .map(|stream_id| {
+            let creds = &creds;
+            let fetcher = &state.fetcher;
+            let done = &done;
+            let app = &app;
+            async move {
+                let entries = client::fetch_epg(fetcher, creds, stream_id)
+                    .await
+                    .unwrap_or_default();
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 25 == 0 || n == total {
+                    let _ = app.emit("epg-progress", EpgProgress { done: n, total });
+                }
+                (stream_id, entries)
+            }
+        })
+        .buffer_unordered(EPG_CONCURRENCY)
+        .collect()
+        .await;
+
+    // 3) Replace cache under the lock.
+    let programs = {
+        let mut conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+        let n = db::replace_epg_for_streams(&mut *conn, provider_id, &results)
+            .map_err(|e| e.to_string())?;
+        db::set_setting(&conn, &format!("last_epg_sync:{provider_id}"), &now().to_string())
+            .map_err(|e| e.to_string())?;
+        n
+    };
+
+    Ok(EpgSyncResult {
+        channels_fetched: total,
+        programs,
+    })
+}
+
+#[tauri::command]
+pub fn get_epg(
+    state: tauri::State<'_, AppState>,
+    provider_id: i64,
+    from: i64,
+    to: i64,
+) -> CmdResult<Vec<db::EpgProgramRow>> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::get_epg_window(&conn, provider_id, from, to).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

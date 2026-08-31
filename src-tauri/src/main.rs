@@ -63,6 +63,8 @@ fn main() {
             commands::record_recent,
             commands::get_setting,
             commands::set_setting,
+            commands::sync_epg,
+            commands::get_epg,
         ])
         .run(tauri::generate_context!())
         .expect("error while running fluxxx");

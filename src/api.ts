@@ -83,6 +83,19 @@ export interface ChannelQueryOpts {
   limit?: number;
 }
 
+export interface EpgProgram {
+  stream_id: number;
+  start_utc: number;
+  stop_utc: number;
+  title: string;
+  description: string;
+}
+
+export interface EpgSyncResult {
+  channels_fetched: number;
+  programs: number;
+}
+
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
 
@@ -119,4 +132,8 @@ export const api = {
     invoke<void>("record_recent", { providerId, streamId }),
   getSetting: (key: string) => invoke<string | null>("get_setting", { key }),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
+
+  syncEpg: (providerId: number) => invoke<EpgSyncResult>("sync_epg", { providerId }),
+  getEpg: (providerId: number, from: number, to: number) =>
+    invoke<EpgProgram[]>("get_epg", { providerId, from, to }),
 };
