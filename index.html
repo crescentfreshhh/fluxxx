@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fluxxx</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">▶</span>
+          <span class="brand-name">fluxxx</span>
+        </div>
+        <nav class="nav">
+          <button class="nav-item is-active" data-view="live">Live TV</button>
+          <button class="nav-item" data-view="guide">Guide</button>
+          <button class="nav-item" data-view="providers">Providers</button>
+          <button class="nav-item" data-view="settings">Settings</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="version-badge" class="badge">connecting…</span>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <h1 id="view-title">Live TV</h1>
+          <div class="topbar-actions">
+            <input id="search" class="search" type="search" placeholder="Search channels…" disabled />
+          </div>
+        </header>
+
+        <section class="stage">
+          <div class="placeholder">
+            <div class="placeholder-icon">▶</div>
+            <h2>Welcome to fluxxx</h2>
+            <p>
+              Lean Xtream Codes IPTV — full EPG guide, multi-provider curation,
+              and a Discord Go-Live friendly window.
+            </p>
+            <p class="muted">
+              Phase 0 scaffold. Add a provider to begin (coming in the next build).
+            </p>
+
+            <!-- Dev playground: proves the Rust core works through Tauri IPC. -->
+            <div class="probe">
+              <label for="probe-input">Country inference probe</label>
+              <input
+                id="probe-input"
+                type="text"
+                placeholder="e.g. UK | Sports HD"
+                value="UK | Sports HD"
+              />
+              <div id="probe-result" class="probe-result"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

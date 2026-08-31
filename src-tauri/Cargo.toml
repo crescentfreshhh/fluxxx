@@ -1,0 +1,16 @@
+[package]
+name = "fluxxx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lean Xtream Codes IPTV player for Windows, optimized for Discord Go-Live."
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+fluxxx-core = { path = "../crates/core" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

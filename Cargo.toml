@@ -1,0 +1,20 @@
+# Workspace root. `fluxxx-core` holds pure, platform-independent logic (Xtream
+# parsing, country inference, curation) that is unit-tested on Linux CI. The
+# `fluxxx` crate under src-tauri is the Windows Tauri app and is built only on
+# the Windows CI runner.
+[workspace]
+resolver = "2"
+members = ["crates/core", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/crescentfreshhh/fluxxx"
+
+[profile.release]
+opt-level = "s"     # optimize for a lean binary
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

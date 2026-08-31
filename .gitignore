@@ -1,0 +1,21 @@
+# Rust / Cargo
+/target
+target/
+
+# Node
+node_modules/
+/dist
+dist/
+
+# Tauri generated sources & schemas
+/src-tauri/gen/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+
+# Portable packaging scratch
+/dist-portable/
