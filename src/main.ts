@@ -2,6 +2,9 @@ import { api } from "./api";
 import { renderProviders } from "./views/providers";
 import { renderLive } from "./views/live";
 import { renderGuide } from "./views/guide";
+import { renderSettings } from "./views/settings";
+import { loadPlaybackConfig } from "./playback";
+import { applySavedWindowPrefs } from "./window";
 import "./styles.css";
 
 type ViewFn = (root: HTMLElement) => void | Promise<void>;
@@ -10,19 +13,8 @@ const views: Record<string, ViewFn> = {
   live: (root) => renderLive(root),
   guide: (root) => renderGuide(root),
   providers: (root) => renderProviders(root),
-  settings: placeholder("Settings", "Settings will arrive alongside playback."),
+  settings: (root) => renderSettings(root),
 };
-
-function placeholder(title: string, body: string): ViewFn {
-  return (root) => {
-    root.innerHTML = `
-      <div class="placeholder">
-        <div class="placeholder-icon">▶</div>
-        <h2>${title}</h2>
-        <p class="muted">${body}</p>
-      </div>`;
-  };
-}
 
 async function activate(view: string): Promise<void> {
   const root = document.getElementById("view-root");
@@ -61,6 +53,8 @@ async function showVersion(): Promise<void> {
 
 window.addEventListener("DOMContentLoaded", () => {
   void showVersion();
+  void loadPlaybackConfig();
+  void applySavedWindowPrefs();
   wireNav();
   void activate("live");
 });

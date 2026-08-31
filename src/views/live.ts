@@ -3,7 +3,7 @@
 // per-channel favorite stars, and a recently-watched strip. Playback itself
 // arrives in a later phase; selecting a channel records it as recent/last.
 import { api, type Channel } from "../api";
-import { openPlayer } from "./player";
+import { playChannel } from "../playback";
 
 let root: HTMLElement;
 let channels: Channel[] = [];
@@ -161,10 +161,26 @@ async function onOpen(ref: string): Promise<void> {
   const ch =
     channels.find((c) => c.provider_id === providerId && c.stream_id === streamId) ??
     recent.find((c) => c.provider_id === providerId && c.stream_id === streamId);
-  await openPlayer({ providerId, streamId, name: ch?.name ?? "Live" });
-  await api.recordRecent(providerId, streamId);
-  await api.setSetting("last_channel", ref);
-  await refreshLists();
+  try {
+    await playChannel({ providerId, streamId, name: ch?.name ?? "Live" });
+    await api.recordRecent(providerId, streamId);
+    await api.setSetting("last_channel", ref);
+    await refreshLists();
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+function toast(msg: string, err = false): void {
+  const t = document.createElement("div");
+  t.className = `toast ${err ? "err" : "ok"}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add("show"), 10);
+  setTimeout(() => {
+    t.classList.remove("show");
+    setTimeout(() => t.remove(), 300);
+  }, 3200);
 }
 
 function esc(s: string): string {

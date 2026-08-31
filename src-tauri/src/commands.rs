@@ -535,6 +535,18 @@ pub fn stream_url(
     ))
 }
 
+/// Launch an external player (e.g. VLC, mpv) with the given arguments. The
+/// command/path is chosen by the user in Settings; this is their machine and
+/// their configuration, so we spawn it as given and return promptly.
+#[tauri::command]
+pub fn launch_external(command: String, args: Vec<String>) -> CmdResult<()> {
+    std::process::Command::new(&command)
+        .args(&args)
+        .spawn()
+        .map_err(|e| format!("Failed to launch '{command}': {e}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_setting(state: tauri::State<'_, AppState>, key: String, value: String) -> CmdResult<()> {
     let conn = state.db.lock().map_err(|_| "db lock poisoned")?;

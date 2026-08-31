@@ -1,7 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core capabilities for the main window.",
+  "description": "Core capabilities for the main window, including Go-Live window control.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-size",
+    "core:window:allow-center",
+    "core:window:allow-set-decorations",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-set-title",
+    "core:window:allow-set-focus",
+    "core:window:allow-start-dragging"
+  ]
 }

@@ -139,4 +139,6 @@ export const api = {
 
   streamUrl: (providerId: number, streamId: number, container?: "m3u8" | "ts") =>
     invoke<string>("stream_url", { providerId, streamId, container: container ?? null }),
+  launchExternal: (command: string, args: string[]) =>
+    invoke<void>("launch_external", { command, args }),
 };
