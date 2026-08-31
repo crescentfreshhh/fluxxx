@@ -2,6 +2,7 @@
 // refresh its EPG (curation-gated, concurrent fetch with a progress bar), and
 // read the schedule. EPG auto-refreshes if the cache is older than 12h.
 import { api, type Channel, type EpgProgram, type Provider } from "../api";
+import { openPlayer } from "./player";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 const HOURS = 12;
@@ -138,6 +139,7 @@ function laneHtml(progs: EpgProgram[]): string {
       const t = `${fmt(p.start_utc)}–${fmt(p.stop_utc)}`;
       return `<div class="prog" style="left:${left}px;width:${width}px"
                 data-title="${esc(p.title)}" data-time="${t}" data-desc="${esc(p.description)}"
+                data-stream="${p.stream_id}"
                 title="${esc(p.title)} (${t})">
                 <span class="prog-title">${esc(p.title)}</span>
               </div>`;
@@ -178,15 +180,23 @@ function showDetail(b: HTMLElement): void {
   const title = b.dataset.title ?? "";
   const time = b.dataset.time ?? "";
   const desc = b.dataset.desc ?? "";
+  const streamId = Number(b.dataset.stream);
   let bar = root.querySelector<HTMLElement>(".prog-detail");
   if (!bar) {
     bar = document.createElement("div");
     bar.className = "prog-detail";
     root.querySelector(".guide")?.appendChild(bar);
   }
-  bar.innerHTML = `<strong>${esc(title)}</strong> <span class="muted">${esc(time)}</span>${
-    desc ? `<div class="pd-desc muted">${esc(desc)}</div>` : ""
-  }`;
+  bar.innerHTML = `
+    <div class="pd-head">
+      <div><strong>${esc(title)}</strong> <span class="muted">${esc(time)}</span></div>
+      <button class="btn btn-primary pd-watch">Watch</button>
+    </div>
+    ${desc ? `<div class="pd-desc muted">${esc(desc)}</div>` : ""}`;
+  bar.querySelector<HTMLButtonElement>(".pd-watch")?.addEventListener("click", () => {
+    const ch = channels.find((c) => c.stream_id === streamId);
+    if (selected != null) void openPlayer({ providerId: selected, streamId, name: ch?.name ?? title });
+  });
 }
 
 async function doSync(): Promise<void> {

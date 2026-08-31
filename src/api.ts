@@ -136,4 +136,7 @@ export const api = {
   syncEpg: (providerId: number) => invoke<EpgSyncResult>("sync_epg", { providerId }),
   getEpg: (providerId: number, from: number, to: number) =>
     invoke<EpgProgram[]>("get_epg", { providerId, from, to }),
+
+  streamUrl: (providerId: number, streamId: number, container?: "m3u8" | "ts") =>
+    invoke<string>("stream_url", { providerId, streamId, container: container ?? null }),
 };

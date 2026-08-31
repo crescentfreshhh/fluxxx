@@ -65,6 +65,7 @@ fn main() {
             commands::set_setting,
             commands::sync_epg,
             commands::get_epg,
+            commands::stream_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running fluxxx");

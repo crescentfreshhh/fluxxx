@@ -507,6 +507,34 @@ pub fn get_epg(
     db::get_epg_window(&conn, provider_id, from, to).map_err(|e| e.to_string())
 }
 
+// --- playback ----------------------------------------------------------------
+
+/// Build a playable live stream URL for a channel. `container` defaults to
+/// `m3u8` (HLS, played in-webview via hls.js); pass `ts` for the raw transport
+/// stream. Credentials are decrypted only to assemble the URL.
+#[tauri::command]
+pub fn stream_url(
+    state: tauri::State<'_, AppState>,
+    provider_id: i64,
+    stream_id: i64,
+    container: Option<String>,
+) -> CmdResult<String> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    let row = db::get_provider(&conn, provider_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("provider not found")?;
+    drop(conn);
+    let creds = creds_from_row(&row)?;
+    let container = container.unwrap_or_else(|| "m3u8".to_string());
+    Ok(fluxxx_core::xtream::stream_url(
+        &creds.base_url,
+        &creds.username,
+        &creds.password,
+        stream_id,
+        &container,
+    ))
+}
+
 #[tauri::command]
 pub fn set_setting(state: tauri::State<'_, AppState>, key: String, value: String) -> CmdResult<()> {
     let conn = state.db.lock().map_err(|_| "db lock poisoned")?;

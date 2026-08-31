@@ -3,6 +3,7 @@
 // per-channel favorite stars, and a recently-watched strip. Playback itself
 // arrives in a later phase; selecting a channel records it as recent/last.
 import { api, type Channel } from "../api";
+import { openPlayer } from "./player";
 
 let root: HTMLElement;
 let channels: Channel[] = [];
@@ -157,24 +158,13 @@ async function onFav(ref: string): Promise<void> {
 
 async function onOpen(ref: string): Promise<void> {
   const { providerId, streamId } = parseRef(ref);
-  const ch = channels.find((c) => c.provider_id === providerId && c.stream_id === streamId)
-    ?? recent.find((c) => c.provider_id === providerId && c.stream_id === streamId);
+  const ch =
+    channels.find((c) => c.provider_id === providerId && c.stream_id === streamId) ??
+    recent.find((c) => c.provider_id === providerId && c.stream_id === streamId);
+  await openPlayer({ providerId, streamId, name: ch?.name ?? "Live" });
   await api.recordRecent(providerId, streamId);
   await api.setSetting("last_channel", ref);
   await refreshLists();
-  flash(`Selected “${ch?.name ?? "channel"}” — playback arrives in the next build`);
-}
-
-function flash(msg: string): void {
-  const t = document.createElement("div");
-  t.className = "toast ok";
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.classList.add("show"), 10);
-  setTimeout(() => {
-    t.classList.remove("show");
-    setTimeout(() => t.remove(), 300);
-  }, 2600);
 }
 
 function esc(s: string): string {

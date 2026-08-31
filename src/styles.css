@@ -916,6 +916,95 @@ body {
   font-size: 12px;
 }
 
+/* Player overlay */
+.player-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent);
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+.player-overlay:hover .player-bar {
+  opacity: 1;
+}
+
+.player-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+}
+
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.player-status {
+  font-size: 12px;
+  color: #cfd0e0;
+}
+
+.player-close {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.player-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.player-video {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+.player-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 40px;
+  color: #cfd0e0;
+  font-size: 14px;
+  line-height: 1.6;
+  pointer-events: none;
+}
+
+/* Guide programme detail */
+.pd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 /* Toast */
 .toast {
   position: fixed;
