@@ -53,7 +53,9 @@ fn main() {
             commands::sync_provider,
             commands::list_categories,
             commands::curation_summary,
+            commands::curation_stats,
             commands::set_category_enabled,
+            commands::set_all_categories_enabled,
             commands::set_country_enabled,
         ])
         .run(tauri::generate_context!())

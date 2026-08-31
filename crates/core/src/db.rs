@@ -226,6 +226,64 @@ pub fn set_category_enabled(conn: &Connection, category_id: i64, enabled: bool) 
     Ok(())
 }
 
+/// Enable/disable every category of a provider at once (bulk wizard action).
+/// Returns the number of categories affected.
+pub fn set_all_categories_enabled(
+    conn: &Connection,
+    provider_id: i64,
+    enabled: bool,
+) -> Result<usize> {
+    let n = conn.execute(
+        "UPDATE categories SET enabled = ?2 WHERE provider_id = ?1",
+        params![provider_id, enabled as i64],
+    )?;
+    Ok(n)
+}
+
+/// Aggregate curation stats for one provider, used by the wizard header. A
+/// channel counts as "enabled" when its category is enabled or it has no
+/// category (matching [`crate::curation::epg_fetch_targets`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct CurationStats {
+    pub total_categories: i64,
+    pub enabled_categories: i64,
+    pub total_channels: i64,
+    pub enabled_channels: i64,
+}
+
+pub fn curation_stats(conn: &Connection, provider_id: i64) -> Result<CurationStats> {
+    let total_categories: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM categories WHERE provider_id = ?1",
+        params![provider_id],
+        |r| r.get(0),
+    )?;
+    let enabled_categories: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM categories WHERE provider_id = ?1 AND enabled = 1",
+        params![provider_id],
+        |r| r.get(0),
+    )?;
+    let total_channels: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM channels WHERE provider_id = ?1",
+        params![provider_id],
+        |r| r.get(0),
+    )?;
+    let enabled_channels: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM channels ch
+         WHERE ch.provider_id = ?1
+           AND (ch.category_id IS NULL
+                OR EXISTS (SELECT 1 FROM categories c
+                           WHERE c.id = ch.category_id AND c.enabled = 1))",
+        params![provider_id],
+        |r| r.get(0),
+    )?;
+    Ok(CurationStats {
+        total_categories,
+        enabled_categories,
+        total_channels,
+        enabled_channels,
+    })
+}
+
 /// Toggle every category of a provider that maps to `country_code` (use `None`
 /// for the "Other" bucket). Returns the number of categories affected.
 pub fn set_country_enabled(
@@ -504,6 +562,36 @@ mod tests {
         assert_eq!(n, 2);
         let listed = list_categories(&conn, pid).unwrap();
         assert_eq!(listed.iter().filter(|c| !c.enabled).count(), 2);
+    }
+
+    #[test]
+    fn stats_and_bulk_toggle() {
+        let mut conn = open_in_memory().unwrap();
+        let pid = insert_provider(&conn, &new_provider()).unwrap();
+        apply_catalog(
+            &mut conn,
+            pid,
+            &[cat("1", "UK | Sports"), cat("2", "US | News")],
+            &[
+                stream(100, "A", Some("1"), None),
+                stream(101, "B", Some("2"), None),
+                stream(102, "Uncat", None, None), // no category -> always enabled
+            ],
+        )
+        .unwrap();
+
+        let s = curation_stats(&conn, pid).unwrap();
+        assert_eq!(s.total_categories, 2);
+        assert_eq!(s.enabled_categories, 2);
+        assert_eq!(s.total_channels, 3);
+        assert_eq!(s.enabled_channels, 3);
+
+        // Disable everything: the uncategorized channel stays enabled.
+        let n = set_all_categories_enabled(&conn, pid, false).unwrap();
+        assert_eq!(n, 2);
+        let s = curation_stats(&conn, pid).unwrap();
+        assert_eq!(s.enabled_categories, 0);
+        assert_eq!(s.enabled_channels, 1); // only the uncategorized one
     }
 
     #[test]

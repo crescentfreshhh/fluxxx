@@ -324,3 +324,22 @@ pub fn set_country_enabled(
     db::set_country_enabled(&conn, provider_id, country_code.as_deref(), enabled)
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn set_all_categories_enabled(
+    state: tauri::State<'_, AppState>,
+    provider_id: i64,
+    enabled: bool,
+) -> CmdResult<usize> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::set_all_categories_enabled(&conn, provider_id, enabled).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn curation_stats(
+    state: tauri::State<'_, AppState>,
+    provider_id: i64,
+) -> CmdResult<db::CurationStats> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::curation_stats(&conn, provider_id).map_err(|e| e.to_string())
+}

@@ -464,6 +464,143 @@ body {
   margin-left: auto;
 }
 
+/* Curator (curation wizard) */
+.btn-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.curator-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.curator-stats {
+  font-size: 13px;
+}
+
+.curator-stats strong {
+  color: var(--text);
+}
+
+.curator-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.curator-search {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 13px;
+}
+
+.curator-bulk {
+  display: flex;
+  gap: 8px;
+}
+
+.curator-body {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.group {
+  border-bottom: 1px solid var(--border);
+}
+.group:last-child {
+  border-bottom: none;
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.group.open .group-head {
+  background: var(--bg);
+}
+
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.caret {
+  color: var(--muted);
+  width: 12px;
+  display: inline-block;
+}
+
+.group-name {
+  font-weight: 600;
+}
+
+.group-count {
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.cat-list {
+  padding: 4px 8px 8px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg);
+}
+
+.cat-list.flat {
+  padding: 8px;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.cat-row:hover {
+  background: var(--bg-elev);
+}
+
+.cat-name {
+  font-size: 13px;
+}
+
+.cat-country {
+  font-size: 11px;
+}
+
+.cat-count {
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 /* Toast */
 .toast {
   position: fixed;

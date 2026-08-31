@@ -1,12 +1,12 @@
 // Providers view: add / enable / disable / delete Xtream providers, test the
-// connection, sync the catalog, and (headline feature) toggle whole countries
-// on or off to tame a huge channel dump.
-import { api, type Provider, type CountryGroup } from "../api";
+// connection, and sync the catalog. Selecting "Curate" mounts the curation
+// wizard (curator.ts) for that provider.
+import { api, type Provider } from "../api";
+import { renderCurator } from "./curator";
 
 let root: HTMLElement;
 let providers: Provider[] = [];
 let selectedId: number | null = null;
-let summary: CountryGroup[] = [];
 
 export async function renderProviders(container: HTMLElement): Promise<void> {
   root = container;
@@ -32,10 +32,16 @@ function draw(): void {
         ${addForm()}
       </section>
 
-      ${selectedId ? curationPanel() : ""}
+      ${selectedId ? `<section class="panel curation" id="curator-host"></section>` : ""}
     </div>
   `;
   wire();
+
+  if (selectedId) {
+    const hostEl = root.querySelector<HTMLElement>("#curator-host");
+    const p = providers.find((x) => x.id === selectedId);
+    if (hostEl && p) void renderCurator(hostEl, p.id, p.name);
+  }
 }
 
 function emptyState(): string {
@@ -57,7 +63,7 @@ function providerCard(p: Provider): string {
         </div>
       </div>
       <div class="provider-actions">
-        <button class="btn" data-act="curate" data-id="${p.id}">Curate</button>
+        <button class="btn ${p.id === selectedId ? "btn-active" : ""}" data-act="curate" data-id="${p.id}">Curate</button>
         <button class="btn" data-act="sync" data-id="${p.id}" ${p.enabled ? "" : "disabled"}>Sync</button>
         <button class="btn btn-danger" data-act="delete" data-id="${p.id}">Delete</button>
       </div>
@@ -86,44 +92,16 @@ function addForm(): string {
     </form>`;
 }
 
-function curationPanel(): string {
-  const p = providers.find((x) => x.id === selectedId);
-  const rows = summary.length
-    ? summary.map(countryRow).join("")
-    : `<p class="muted">No categories cached yet. Sync this provider first.</p>`;
-  return `
-    <section class="panel curation">
-      <h3>Curate — ${esc(p?.name ?? "")}</h3>
-      <p class="muted">Toggle whole countries. Disabled groups are fully excluded from EPG fetching.</p>
-      <div class="country-list">${rows}</div>
-    </section>`;
-}
-
-function countryRow(g: CountryGroup): string {
-  const key = g.code ?? "__other__";
-  return `
-    <div class="country-row">
-      <label class="switch">
-        <input type="checkbox" data-act="country" data-code="${key}" ${g.fully_enabled ? "checked" : ""} />
-        <span class="slider"></span>
-      </label>
-      <span class="country-name">${esc(g.name)}</span>
-      <span class="country-count muted">${g.channel_count.toLocaleString()} ch · ${g.enabled_categories}/${g.total_categories} groups</span>
-    </div>`;
-}
-
 // --- events ------------------------------------------------------------------
 
 function wire(): void {
-  root.querySelectorAll<HTMLElement>("[data-act]").forEach((elm) => {
+  root.querySelectorAll<HTMLElement>(".providers > .panel [data-act]").forEach((elm) => {
     const act = elm.dataset.act!;
     if (act === "toggle") {
-      elm.addEventListener("change", () => onToggle(Number(elm.dataset.id), (elm as HTMLInputElement).checked));
-    } else if (act === "country") {
       elm.addEventListener("change", () =>
-        onCountryToggle(elm.dataset.code!, (elm as HTMLInputElement).checked),
+        void onToggle(Number(elm.dataset.id), (elm as HTMLInputElement).checked),
       );
-    } else {
+    } else if (act) {
       elm.addEventListener("click", () => {
         const id = Number(elm.dataset.id);
         if (act === "sync") void onSync(id);
@@ -195,11 +173,10 @@ async function onAdd(form: HTMLFormElement): Promise<void> {
 async function onToggle(id: number, enabled: boolean): Promise<void> {
   try {
     await api.setProviderEnabled(id, enabled);
-    await refreshProviders();
   } catch (e) {
     console.error(e);
-    await refreshProviders();
   }
+  await refreshProviders();
 }
 
 async function onDelete(id: number): Promise<void> {
@@ -211,6 +188,7 @@ async function onDelete(id: number): Promise<void> {
 }
 
 async function onSync(id: number): Promise<void> {
+  const wasFirstSync = !providers.find((x) => x.id === id)?.last_synced_at;
   const btn = root.querySelector<HTMLButtonElement>(`[data-act="sync"][data-id="${id}"]`);
   if (btn) {
     btn.disabled = true;
@@ -218,7 +196,9 @@ async function onSync(id: number): Promise<void> {
   }
   try {
     const res = await api.syncProvider(id);
-    if (selectedId === id) summary = await api.curationSummary(id);
+    // Open the curator automatically after the first sync so a huge dump gets
+    // curated before it floods anything.
+    if (wasFirstSync) selectedId = id;
     await refreshProviders();
     flash(`Synced: ${res.categories} categories, ${res.channels.toLocaleString()} channels`);
   } catch (e) {
@@ -229,19 +209,10 @@ async function onSync(id: number): Promise<void> {
 
 async function onCurate(id: number): Promise<void> {
   selectedId = selectedId === id ? null : id;
-  summary = selectedId ? await api.curationSummary(selectedId) : [];
   draw();
 }
 
-async function onCountryToggle(code: string, enabled: boolean): Promise<void> {
-  if (!selectedId) return;
-  const country = code === "__other__" ? null : code;
-  await api.setCountryEnabled(selectedId, country, enabled);
-  summary = await api.curationSummary(selectedId);
-  draw();
-}
-
-// --- small helpers -----------------------------------------------------------
+// --- helpers -----------------------------------------------------------------
 
 function flash(msg: string, err = false): void {
   const t = document.createElement("div");

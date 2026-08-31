@@ -46,6 +46,22 @@ export interface CountryGroup {
   fully_enabled: boolean;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  country_code: string | null;
+  country_name: string | null;
+  enabled: boolean;
+  channel_count: number;
+}
+
+export interface CurationStats {
+  total_categories: number;
+  enabled_categories: number;
+  total_channels: number;
+  enabled_channels: number;
+}
+
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
 
@@ -59,6 +75,12 @@ export const api = {
 
   curationSummary: (providerId: number) =>
     invoke<CountryGroup[]>("curation_summary", { providerId }),
+  curationStats: (providerId: number) => invoke<CurationStats>("curation_stats", { providerId }),
+  listCategories: (providerId: number) => invoke<Category[]>("list_categories", { providerId }),
   setCountryEnabled: (providerId: number, countryCode: string | null, enabled: boolean) =>
     invoke<number>("set_country_enabled", { providerId, countryCode, enabled }),
+  setCategoryEnabled: (categoryId: number, enabled: boolean) =>
+    invoke<void>("set_category_enabled", { categoryId, enabled }),
+  setAllCategoriesEnabled: (providerId: number, enabled: boolean) =>
+    invoke<number>("set_all_categories_enabled", { providerId, enabled }),
 };
