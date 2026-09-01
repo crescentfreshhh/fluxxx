@@ -1051,19 +1051,56 @@ body {
   color: #cfd0e0;
 }
 
-.player-close {
+.pbtn {
   background: rgba(255, 255, 255, 0.12);
   border: none;
   color: #fff;
-  width: 30px;
   height: 30px;
+  padding: 0 12px;
   border-radius: 8px;
   cursor: pointer;
+  font-size: 13px;
+}
+
+.pbtn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.player-close {
+  width: 30px;
+  padding: 0;
   font-size: 15px;
 }
 
-.player-close:hover {
-  background: rgba(255, 255, 255, 0.25);
+.player-diag {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: min(560px, 72vw);
+  background: rgba(0, 0, 0, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 10px 12px;
+  z-index: 3;
+}
+
+.player-diag pre {
+  margin: 0;
+  font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  color: #d6d7e2;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 48vh;
+  overflow: auto;
+}
+
+.pm-box {
+  max-width: 460px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 16px 20px;
+  pointer-events: none;
 }
 
 .player-video {
