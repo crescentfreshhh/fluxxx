@@ -3,10 +3,11 @@
 // excluded from EPG fetching (enforced in the backend). Country rows roll up
 // their categories; expand a country to toggle individual categories.
 import { api, type Category, type CurationStats } from "../api";
+import { inferTheme } from "../groups";
 
 interface Group {
-  key: string; // country_code or "__other__"
-  code: string | null;
+  key: string; // "c:<code>" for a country, "t:<theme>" for a theme bucket
+  kind: "country" | "theme";
   name: string;
   cats: Category[];
   channels: number;
@@ -50,17 +51,22 @@ async function refreshStats(): Promise<void> {
 function groups(): Group[] {
   const map = new Map<string, Group>();
   for (const c of categories) {
-    const key = c.country_code ?? "__other__";
+    let key: string;
+    let name: string;
+    let kind: "country" | "theme";
+    if (c.country_code) {
+      key = `c:${c.country_code}`;
+      name = c.country_name ?? c.country_code;
+      kind = "country";
+    } else {
+      const theme = inferTheme(c.name);
+      key = `t:${theme}`;
+      name = theme;
+      kind = "theme";
+    }
     let g = map.get(key);
     if (!g) {
-      g = {
-        key,
-        code: c.country_code,
-        name: c.country_name ?? "Other",
-        cats: [],
-        channels: 0,
-        enabled: 0,
-      };
+      g = { key, kind, name, cats: [], channels: 0, enabled: 0 };
       map.set(key, g);
     }
     g.cats.push(c);
@@ -68,8 +74,11 @@ function groups(): Group[] {
     if (c.enabled) g.enabled += 1;
   }
   return [...map.values()].sort((a, b) => {
-    if (a.code === null) return 1;
-    if (b.code === null) return -1;
+    // Countries first, then theme groups; "Ungrouped" always last.
+    const aUng = a.name === "Ungrouped";
+    const bUng = b.name === "Ungrouped";
+    if (aUng !== bUng) return aUng ? 1 : -1;
+    if (a.kind !== b.kind) return a.kind === "country" ? -1 : 1;
     return b.channels - a.channels || a.name.localeCompare(b.name);
   });
 }
@@ -118,7 +127,7 @@ function groupedList(): string {
         <div class="group ${isOpen ? "open" : ""}">
           <div class="group-head">
             <label class="switch">
-              <input type="checkbox" data-country="${g.code ?? "__other__"}" ${full ? "checked" : ""} />
+              <input type="checkbox" data-group="${g.key}" ${full ? "checked" : ""} />
               <span class="slider"></span>
             </label>
             <button class="group-toggle" data-expand="${g.key}">
@@ -156,9 +165,14 @@ function catRow(c: Category): string {
 
 function applyIndeterminate(): void {
   for (const g of groups()) {
-    const box = host.querySelector<HTMLInputElement>(`[data-country="${g.code ?? "__other__"}"]`);
+    const box = host.querySelector<HTMLInputElement>(`[data-group="${cssEscape(g.key)}"]`);
     if (box) box.indeterminate = g.enabled > 0 && g.enabled < g.cats.length;
   }
+}
+
+// Group keys contain ':' and '/' (e.g. "t:PPV / Events"); escape for a selector.
+function cssEscape(s: string): string {
+  return (window.CSS && CSS.escape ? CSS.escape(s) : s.replace(/["\\]/g, "\\$&"));
 }
 
 // --- events ------------------------------------------------------------------
@@ -185,8 +199,8 @@ function wire(): void {
       draw();
     }),
   );
-  host.querySelectorAll<HTMLInputElement>("[data-country]").forEach((box) =>
-    box.addEventListener("change", () => void onCountry(box.dataset.country!, box.checked)),
+  host.querySelectorAll<HTMLInputElement>("[data-group]").forEach((box) =>
+    box.addEventListener("change", () => void onGroup(box.dataset.group!, box.checked)),
   );
   host.querySelectorAll<HTMLInputElement>("[data-cat]").forEach((box) =>
     box.addEventListener("change", () => void onCategory(Number(box.dataset.cat), box.checked)),
@@ -200,12 +214,13 @@ async function onBulk(enabled: boolean): Promise<void> {
   await refreshStats();
 }
 
-async function onCountry(code: string, enabled: boolean): Promise<void> {
-  const country = code === "__other__" ? null : code;
-  await api.setCountryEnabled(providerId, country, enabled);
-  categories = categories.map((c) =>
-    (c.country_code ?? "__other__") === code ? { ...c, enabled } : c,
-  );
+async function onGroup(key: string, enabled: boolean): Promise<void> {
+  const g = groups().find((x) => x.key === key);
+  if (!g) return;
+  const ids = g.cats.map((c) => c.id);
+  await api.setCategoriesEnabled(ids, enabled);
+  const idset = new Set(ids);
+  categories = categories.map((c) => (idset.has(c.id) ? { ...c, enabled } : c));
   draw();
   await refreshStats();
 }

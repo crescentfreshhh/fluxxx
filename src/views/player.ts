@@ -182,8 +182,10 @@ async function openInVlc(): Promise<void> {
   if (!opts) return;
   try {
     const vlc = (await api.getSetting("vlc_path")) || DEFAULT_VLC;
+    const argsStr = (await api.getSetting("vlc_args")) ?? "--qt-minimal-view";
+    const argv = argsStr.split(/\s+/).filter(Boolean);
     const tsUrl = await api.streamUrl(opts.providerId, opts.streamId, "ts");
-    await api.launchExternal(vlc, [tsUrl]);
+    await api.launchExternal(vlc, [...argv, tsUrl]);
     toast("Opening in VLC…");
     // Hand off to VLC; the black in-app surface is no longer useful.
     setTimeout(() => close(), 600);

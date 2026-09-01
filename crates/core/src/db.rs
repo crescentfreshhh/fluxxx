@@ -482,6 +482,7 @@ pub struct ChannelRow {
 #[derive(Debug, Clone, Default)]
 pub struct ChannelQuery {
     pub provider_id: Option<i64>,
+    pub category_id: Option<i64>,
     pub search: Option<String>,
     pub favorites_only: bool,
     pub limit: i64,
@@ -523,6 +524,10 @@ pub fn list_channels(conn: &Connection, query: &ChannelQuery) -> Result<Vec<Chan
     if let Some(pid) = query.provider_id {
         sql.push_str(" AND ch.provider_id = ?");
         args.push(Value::Integer(pid));
+    }
+    if let Some(cid) = query.category_id {
+        sql.push_str(" AND ch.category_id = ?");
+        args.push(Value::Integer(cid));
     }
     if let Some(s) = query.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         sql.push_str(" AND ch.name LIKE ? ESCAPE '\\'");
@@ -607,6 +612,57 @@ pub fn list_recent(conn: &Connection, limit: i64) -> Result<Vec<ChannelRow>> {
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![limit.max(0)], map_channel_row)?;
     rows.collect()
+}
+
+// --- active categories (for the Live TV group filter) ------------------------
+
+/// An enabled category on an enabled provider, with its channel count.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ActiveCategoryRow {
+    pub id: i64,
+    pub name: String,
+    pub country_code: Option<String>,
+    pub provider_name: String,
+    pub channel_count: i64,
+}
+
+/// List enabled categories across enabled providers, for the Live TV group
+/// filter (ordered by provider then name).
+pub fn list_active_categories(conn: &Connection) -> Result<Vec<ActiveCategoryRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, c.name, c.country_code, p.name AS provider_name,
+                (SELECT COUNT(*) FROM channels ch WHERE ch.category_id = c.id) AS channel_count
+         FROM categories c
+         JOIN providers p ON p.id = c.provider_id AND p.enabled = 1
+         WHERE c.enabled = 1
+         ORDER BY p.name COLLATE NOCASE, c.name COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ActiveCategoryRow {
+            id: row.get("id")?,
+            name: row.get("name")?,
+            country_code: row.get("country_code")?,
+            provider_name: row.get("provider_name")?,
+            channel_count: row.get("channel_count")?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// Enable/disable a set of categories in one statement (batch group toggle).
+pub fn set_categories_enabled(conn: &Connection, ids: &[i64], enabled: bool) -> Result<usize> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!("UPDATE categories SET enabled = ? WHERE id IN ({placeholders})");
+    let mut args: Vec<Value> = Vec::with_capacity(ids.len() + 1);
+    args.push(Value::Integer(enabled as i64));
+    for id in ids {
+        args.push(Value::Integer(*id));
+    }
+    let n = conn.execute(&sql, params_from_iter(args.iter()))?;
+    Ok(n)
 }
 
 // --- EPG ---------------------------------------------------------------------
@@ -913,6 +969,49 @@ mod tests {
         // Provider disabled -> nothing active.
         set_provider_enabled(&conn, pid, false).unwrap();
         assert!(list_channels(&conn, &ChannelQuery::default()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn category_filter_and_batch_toggle() {
+        let mut conn = open_in_memory().unwrap();
+        let pid = insert_provider(&conn, &new_provider()).unwrap();
+        apply_catalog(
+            &mut conn,
+            pid,
+            &[cat("1", "UK | Sports"), cat("2", "4K UHD"), cat("3", "MUSIC")],
+            &[
+                stream(100, "Sky Sports", Some("1"), None),
+                stream(101, "4K One", Some("2"), None),
+                stream(102, "MTV", Some("3"), None),
+            ],
+        )
+        .unwrap();
+
+        // Active categories: all three enabled, across the one provider.
+        let active = list_active_categories(&conn).unwrap();
+        assert_eq!(active.len(), 3);
+        assert!(active.iter().any(|c| c.name == "4K UHD" && c.channel_count == 1));
+
+        // Filter channels by the 4K category.
+        let uhd_id = active.iter().find(|c| c.name == "4K UHD").unwrap().id;
+        let filtered = list_channels(
+            &conn,
+            &ChannelQuery {
+                category_id: Some(uhd_id),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "4K One");
+
+        // Batch-disable 4K + Music.
+        let music_id = active.iter().find(|c| c.name == "MUSIC").unwrap().id;
+        let n = set_categories_enabled(&conn, &[uhd_id, music_id], false).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(list_active_categories(&conn).unwrap().len(), 1); // only UK Sports left
+        // Their channels drop out of the active list.
+        assert_eq!(list_channels(&conn, &ChannelQuery::default()).unwrap().len(), 1);
     }
 
     #[test]

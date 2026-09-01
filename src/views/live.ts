@@ -1,77 +1,112 @@
-// Live TV view: browse active channels (only enabled providers + enabled
-// categories) unified and grouped by provider, with search, a favorites filter,
-// per-channel favorite stars, and a recently-watched strip. Playback itself
-// arrives in a later phase; selecting a channel records it as recent/last.
-import { api, type Channel } from "../api";
+// Live TV: browse active channels (enabled providers + enabled categories),
+// unified and grouped by provider. Search, a group (category) filter, favorites,
+// and a recently-watched strip. Selecting a channel plays it via the configured
+// backend (VLC by default) and records it as recent/last.
+//
+// The toolbar is rendered ONCE and only #live-results re-renders, so the search
+// box never loses focus while typing.
+import { api, type ActiveCategory, type Channel } from "../api";
+import { inferTheme } from "../groups";
 import { playChannel } from "../playback";
 
 let root: HTMLElement;
 let channels: Channel[] = [];
 let recent: Channel[] = [];
+let activeCats: ActiveCategory[] = [];
 let search = "";
 let favoritesOnly = false;
-const LIMIT = 500;
+let categoryId: number | null = null;
+const LIMIT = 2000;
 
 export async function renderLive(container: HTMLElement): Promise<void> {
   root = container;
   root.innerHTML = `<p class="muted" style="padding:24px">Loading channels…</p>`;
-  await reload();
+  [activeCats, recent] = await Promise.all([api.listActiveCategories(), api.listRecent(15)]);
+  drawShell();
+  await loadResults();
 }
 
-async function reload(): Promise<void> {
-  [channels, recent] = await Promise.all([
-    api.listChannels({ search, favoritesOnly, limit: LIMIT }),
-    api.listRecent(15),
-  ]);
-  draw();
-}
-
-async function refreshLists(): Promise<void> {
-  // Lighter refresh after a favorite/select without rebuilding the toolbar.
-  [channels, recent] = await Promise.all([
-    api.listChannels({ search, favoritesOnly, limit: LIMIT }),
-    api.listRecent(15),
-  ]);
-  draw();
-}
-
-function draw(): void {
-  const grouped = groupByProvider(channels);
-  const capped = channels.length >= LIMIT;
-
+function drawShell(): void {
   root.innerHTML = `
     <div class="live">
       <div class="live-toolbar">
         <input class="live-search" type="search" placeholder="Search channels…" value="${esc(search)}" />
+        <select class="group-select" title="Filter by group">${groupOptions()}</select>
         <label class="chk">
           <input type="checkbox" class="fav-filter" ${favoritesOnly ? "checked" : ""} />
-          <span>Favorites only</span>
+          <span>Favorites</span>
         </label>
       </div>
-
-      ${recent.length ? recentStrip() : ""}
-
-      ${
-        channels.length === 0
-          ? `<p class="muted empty">No channels. ${favoritesOnly ? "No favorites yet." : "Add a provider, sync it, and enable some categories."}</p>`
-          : grouped.map(([prov, list]) => providerSection(prov, list)).join("")
-      }
-      ${capped ? `<p class="muted cap-note">Showing first ${LIMIT}. Refine your search to narrow results.</p>` : ""}
+      <div id="live-recent"></div>
+      <div id="live-results"><p class="muted" style="padding:16px 4px">Loading…</p></div>
     </div>`;
-  wire();
+  wireToolbar();
+  renderRecent();
 }
 
-function recentStrip(): string {
-  return `
-    <div class="recent-strip">
-      <div class="strip-title">Recently watched</div>
-      <div class="strip-row">
-        ${recent.map((c) => `
-          <button class="recent-chip" data-open="${c.provider_id}:${c.stream_id}" title="${esc(c.name)}">
-            ${logo(c)}<span>${esc(c.name)}</span>
-          </button>`).join("")}
-      </div>
-    </div>`;
+function groupOptions(): string {
+  // Bucket categories by country code (or inferred theme) into <optgroup>s.
+  const buckets = new Map<string, ActiveCategory[]>();
+  for (const c of activeCats) {
+    const label = c.country_code ?? inferTheme(c.name);
+    (buckets.get(label) ?? buckets.set(label, []).get(label)!).push(c);
+  }
+  const labels = [...buckets.keys()].sort((a, b) =>
+    a === "Ungrouped" ? 1 : b === "Ungrouped" ? -1 : a.localeCompare(b),
+  );
+  let html = `<option value="">All channels</option>`;
+  for (const label of labels) {
+    const cats = buckets.get(label)!.sort((a, b) => a.name.localeCompare(b.name));
+    html += `<optgroup label="${esc(label)}">`;
+    for (const c of cats) {
+      html += `<option value="${c.id}" ${categoryId === c.id ? "selected" : ""}>${esc(
+        c.name,
+      )} (${c.channel_count})</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  return html;
+}
+
+async function loadResults(): Promise<void> {
+  channels = await api.listChannels({ categoryId, search, favoritesOnly, limit: LIMIT });
+  renderResults();
+}
+
+function renderResults(): void {
+  const el = root.querySelector<HTMLElement>("#live-results");
+  if (!el) return;
+  if (channels.length === 0) {
+    el.innerHTML = `<p class="muted empty">No channels. ${
+      favoritesOnly ? "No favorites yet." : "Try a different group, or sync/enable categories."
+    }</p>`;
+    return;
+  }
+  const capped = channels.length >= LIMIT;
+  const grouped = groupByProvider(channels);
+  el.innerHTML =
+    grouped.map(([prov, list]) => providerSection(prov, list)).join("") +
+    (capped ? `<p class="muted cap-note">Showing first ${LIMIT.toLocaleString()}. Filter or search to narrow.</p>` : "");
+  wireResults();
+}
+
+function renderRecent(): void {
+  const el = root.querySelector<HTMLElement>("#live-recent");
+  if (!el) return;
+  el.innerHTML = recent.length
+    ? `<div class="recent-strip">
+         <div class="strip-title">Recently watched</div>
+         <div class="strip-row">
+           ${recent
+             .map(
+               (c) => `<button class="recent-chip" data-open="${c.provider_id}:${c.stream_id}" title="${esc(c.name)}">
+                 ${logo(c)}<span>${esc(c.name)}</span></button>`,
+             )
+             .join("")}
+         </div>
+       </div>`
+    : "";
+  wireRecent();
 }
 
 function providerSection(provider: string, list: Channel[]): string {
@@ -107,38 +142,50 @@ function logo(c: Channel): string {
 function groupByProvider(list: Channel[]): [string, Channel[]][] {
   const map = new Map<string, Channel[]>();
   for (const c of list) {
-    const arr = map.get(c.provider_name) ?? [];
-    arr.push(c);
-    map.set(c.provider_name, arr);
+    (map.get(c.provider_name) ?? map.set(c.provider_name, []).get(c.provider_name)!).push(c);
   }
   return [...map.entries()];
 }
 
 // --- events ------------------------------------------------------------------
 
-function wire(): void {
+function wireToolbar(): void {
   const s = root.querySelector<HTMLInputElement>(".live-search");
   let t: number | undefined;
   s?.addEventListener("input", () => {
     window.clearTimeout(t);
     t = window.setTimeout(() => {
       search = s.value;
-      void reload();
+      void loadResults();
     }, 200);
+  });
+
+  root.querySelector<HTMLSelectElement>(".group-select")?.addEventListener("change", (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    categoryId = v ? Number(v) : null;
+    void loadResults();
   });
 
   root.querySelector<HTMLInputElement>(".fav-filter")?.addEventListener("change", (e) => {
     favoritesOnly = (e.target as HTMLInputElement).checked;
-    void reload();
+    void loadResults();
   });
+}
 
-  root.querySelectorAll<HTMLElement>("[data-fav]").forEach((b) =>
+function wireResults(): void {
+  root.querySelectorAll<HTMLElement>("#live-results [data-fav]").forEach((b) =>
     b.addEventListener("click", (e) => {
       e.stopPropagation();
-      void onFav(b.dataset.fav!);
+      void onFav(b);
     }),
   );
-  root.querySelectorAll<HTMLElement>("[data-open]").forEach((b) =>
+  root.querySelectorAll<HTMLElement>("#live-results [data-open]").forEach((b) =>
+    b.addEventListener("click", () => void onOpen(b.dataset.open!)),
+  );
+}
+
+function wireRecent(): void {
+  root.querySelectorAll<HTMLElement>("#live-recent [data-open]").forEach((b) =>
     b.addEventListener("click", () => void onOpen(b.dataset.open!)),
   );
 }
@@ -148,12 +195,15 @@ function parseRef(ref: string): { providerId: number; streamId: number } {
   return { providerId: Number(p), streamId: Number(s) };
 }
 
-async function onFav(ref: string): Promise<void> {
-  const { providerId, streamId } = parseRef(ref);
+async function onFav(btn: HTMLElement): Promise<void> {
+  const { providerId, streamId } = parseRef(btn.dataset.fav!);
   const ch = channels.find((c) => c.provider_id === providerId && c.stream_id === streamId);
   const next = !(ch?.favorite ?? false);
   await api.setFavorite(providerId, streamId, next);
-  await refreshLists();
+  if (ch) ch.favorite = next;
+  btn.classList.toggle("on", next);
+  btn.textContent = next ? "★" : "☆";
+  if (favoritesOnly && !next) void loadResults(); // dropped from a favorites-only view
 }
 
 async function onOpen(ref: string): Promise<void> {
@@ -165,7 +215,8 @@ async function onOpen(ref: string): Promise<void> {
     await playChannel({ providerId, streamId, name: ch?.name ?? "Live" });
     await api.recordRecent(providerId, streamId);
     await api.setSetting("last_channel", ref);
-    await refreshLists();
+    recent = await api.listRecent(15);
+    renderRecent();
   } catch (e) {
     toast(String(e), true);
   }

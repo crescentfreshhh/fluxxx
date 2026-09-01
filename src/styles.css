@@ -124,6 +124,7 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .topbar {
@@ -234,10 +235,13 @@ body {
   color: var(--muted);
 }
 
-/* Stage becomes a scrollable, top-aligned container for views. */
+/* Stage becomes a scrollable, top-aligned container for views. The min-height:0
+   is essential: without it a flex child won't shrink, so tall content overflows
+   the viewport (clipped by body{overflow:hidden}) instead of scrolling. */
 .stage {
   display: block;
   place-items: initial;
+  min-height: 0;
 }
 
 /* Providers view */
@@ -622,6 +626,16 @@ body {
   border-radius: 8px;
   padding: 9px 12px;
   font-size: 14px;
+}
+
+.group-select {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 13px;
+  max-width: 240px;
 }
 
 .chk {

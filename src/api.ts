@@ -78,9 +78,18 @@ export interface Channel {
 
 export interface ChannelQueryOpts {
   providerId?: number | null;
+  categoryId?: number | null;
   search?: string | null;
   favoritesOnly?: boolean;
   limit?: number;
+}
+
+export interface ActiveCategory {
+  id: number;
+  name: string;
+  country_code: string | null;
+  provider_name: string;
+  channel_count: number;
 }
 
 export interface EpgProgram {
@@ -121,10 +130,14 @@ export const api = {
   listChannels: (opts: ChannelQueryOpts = {}) =>
     invoke<Channel[]>("list_channels", {
       providerId: opts.providerId ?? null,
+      categoryId: opts.categoryId ?? null,
       search: opts.search ?? null,
       favoritesOnly: opts.favoritesOnly ?? false,
       limit: opts.limit ?? null,
     }),
+  listActiveCategories: () => invoke<ActiveCategory[]>("list_active_categories"),
+  setCategoriesEnabled: (categoryIds: number[], enabled: boolean) =>
+    invoke<number>("set_categories_enabled", { categoryIds, enabled }),
   listRecent: (limit = 20) => invoke<Channel[]>("list_recent", { limit }),
   setFavorite: (providerId: number, streamId: number, favorite: boolean) =>
     invoke<void>("set_favorite", { providerId, streamId, favorite }),

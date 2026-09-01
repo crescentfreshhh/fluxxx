@@ -33,7 +33,7 @@ function draw(borderless: boolean, onTop: boolean): void {
           ${backendOption("external", "Custom external", "Launch any player (mpv, PotPlayer, …) by path.", cfg.backend)}
         </div>
 
-        ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.externalContainer) : ""}
+        ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.vlcArgs, cfg.externalContainer) : ""}
         ${cfg.backend === "external" ? externalFields(cfg.externalCommand, cfg.externalContainer) : ""}
       </section>
 
@@ -85,11 +85,15 @@ function backendOption(value: Backend, title: string, desc: string, current: Bac
     </label>`;
 }
 
-function vlcFields(path: string, container: string): string {
+function vlcFields(path: string, args: string, container: string): string {
   return `
     <div class="field">
       <label>VLC path</label>
       <input class="cfg-input" data-cfg="vlcPath" value="${esc(path || DEFAULT_VLC)}" placeholder="${esc(DEFAULT_VLC)}" />
+    </div>
+    <div class="field">
+      <label>VLC arguments (e.g. --qt-minimal-view for a minimal window)</label>
+      <input class="cfg-input" data-cfg="vlcArgs" value="${esc(args)}" placeholder="--qt-minimal-view" />
     </div>
     ${containerField(container)}`;
 }

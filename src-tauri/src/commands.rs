@@ -349,12 +349,14 @@ pub fn curation_stats(
 pub fn list_channels(
     state: tauri::State<'_, AppState>,
     provider_id: Option<i64>,
+    category_id: Option<i64>,
     search: Option<String>,
     favorites_only: bool,
     limit: Option<i64>,
 ) -> CmdResult<Vec<db::ChannelRow>> {
     let query = db::ChannelQuery {
         provider_id,
+        category_id,
         search,
         favorites_only,
         limit: limit.unwrap_or(500),
@@ -362,6 +364,24 @@ pub fn list_channels(
     };
     let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
     db::list_channels(&conn, &query).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_active_categories(
+    state: tauri::State<'_, AppState>,
+) -> CmdResult<Vec<db::ActiveCategoryRow>> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::list_active_categories(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_categories_enabled(
+    state: tauri::State<'_, AppState>,
+    category_ids: Vec<i64>,
+    enabled: bool,
+) -> CmdResult<usize> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned")?;
+    db::set_categories_enabled(&conn, &category_ids, enabled).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
