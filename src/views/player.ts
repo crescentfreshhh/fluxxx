@@ -5,9 +5,13 @@
 //
 // hls.js (~190KB gzip) is lazy-loaded on first play so the app stays lean.
 import { api } from "../api";
+import { isHdr } from "../groups";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const DEFAULT_VLC = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe";
+const DEFAULT_HDR_KEYWORDS = "HDR, HDR10, DV, Dolby Vision";
+const DEFAULT_HDR_VLC_ARGS =
+  "--video-filter=adjust --brightness=1.2 --gamma=1.4 --contrast=1.05 --saturation=1.35";
 const MAX_NET_RETRIES = 3;
 const LOG_MAX = 16;
 
@@ -184,6 +188,11 @@ async function openInVlc(): Promise<void> {
     const vlc = (await api.getSetting("vlc_path")) || DEFAULT_VLC;
     const argsStr = (await api.getSetting("vlc_args")) ?? "--qt-minimal-view";
     const argv = argsStr.split(/\s+/).filter(Boolean);
+    const keywords = ((await api.getSetting("hdr_keywords")) ?? DEFAULT_HDR_KEYWORDS).split(",");
+    if (isHdr(opts.name, keywords)) {
+      const hdrArgs = (await api.getSetting("hdr_vlc_args")) ?? DEFAULT_HDR_VLC_ARGS;
+      argv.push(...hdrArgs.split(/\s+/).filter(Boolean));
+    }
     const tsUrl = await api.streamUrl(opts.providerId, opts.streamId, "ts");
     await api.launchExternal(vlc, [...argv, tsUrl]);
     toast("Opening in VLC…");

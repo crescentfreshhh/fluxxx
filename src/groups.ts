@@ -38,3 +38,17 @@ export function inferTheme(name: string): Theme {
   }
   return "Ungrouped";
 }
+
+/**
+ * Heuristic "is this an HDR stream?" — Xtream gives no HDR flag and we don't
+ * probe the stream, so we match the channel/category text against user-tunable
+ * keywords (default HDR/DV/Dolby Vision). Word-ish, case-insensitive.
+ */
+export function isHdr(text: string, keywords: string[]): boolean {
+  if (!text) return false;
+  const hay = text.toLowerCase();
+  return keywords.some((k) => {
+    const kw = k.trim().toLowerCase();
+    return kw.length > 0 && hay.includes(kw);
+  });
+}

@@ -7,7 +7,7 @@
 // box never loses focus while typing.
 import { api, type ActiveCategory, type Channel } from "../api";
 import { inferTheme } from "../groups";
-import { playChannel } from "../playback";
+import { playChannel, matchesHdr } from "../playback";
 
 let root: HTMLElement;
 let channels: Channel[] = [];
@@ -212,7 +212,8 @@ async function onOpen(ref: string): Promise<void> {
     channels.find((c) => c.provider_id === providerId && c.stream_id === streamId) ??
     recent.find((c) => c.provider_id === providerId && c.stream_id === streamId);
   try {
-    await playChannel({ providerId, streamId, name: ch?.name ?? "Live" });
+    const hdr = matchesHdr(`${ch?.name ?? ""} ${ch?.category_name ?? ""}`);
+    await playChannel({ providerId, streamId, name: ch?.name ?? "Live", hdr });
     await api.recordRecent(providerId, streamId);
     await api.setSetting("last_channel", ref);
     recent = await api.listRecent(15);

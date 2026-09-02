@@ -2,7 +2,7 @@
 // refresh its EPG (curation-gated, concurrent fetch with a progress bar), and
 // read the schedule. EPG auto-refreshes if the cache is older than 12h.
 import { api, type Channel, type EpgProgram, type Provider } from "../api";
-import { playChannel } from "../playback";
+import { playChannel, matchesHdr } from "../playback";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 const HOURS = 12;
@@ -196,7 +196,8 @@ function showDetail(b: HTMLElement): void {
   bar.querySelector<HTMLButtonElement>(".pd-watch")?.addEventListener("click", () => {
     const ch = channels.find((c) => c.stream_id === streamId);
     if (selected != null) {
-      void playChannel({ providerId: selected, streamId, name: ch?.name ?? title }).catch((e) =>
+      const hdr = matchesHdr(`${ch?.name ?? ""} ${ch?.category_name ?? ""}`);
+      void playChannel({ providerId: selected, streamId, name: ch?.name ?? title, hdr }).catch((e) =>
         flash(String(e), true),
       );
     }

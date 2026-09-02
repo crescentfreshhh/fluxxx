@@ -33,7 +33,7 @@ function draw(borderless: boolean, onTop: boolean): void {
           ${backendOption("external", "Custom external", "Launch any player (mpv, PotPlayer, …) by path.", cfg.backend)}
         </div>
 
-        ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.vlcArgs, cfg.externalContainer) : ""}
+        ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.vlcArgs, cfg.hdrKeywords, cfg.hdrVlcArgs, cfg.externalContainer) : ""}
         ${cfg.backend === "external" ? externalFields(cfg.externalCommand, cfg.externalContainer) : ""}
       </section>
 
@@ -85,7 +85,13 @@ function backendOption(value: Backend, title: string, desc: string, current: Bac
     </label>`;
 }
 
-function vlcFields(path: string, args: string, container: string): string {
+function vlcFields(
+  path: string,
+  args: string,
+  hdrKeywords: string,
+  hdrVlcArgs: string,
+  container: string,
+): string {
   return `
     <div class="field">
       <label>VLC path</label>
@@ -94,6 +100,14 @@ function vlcFields(path: string, args: string, container: string): string {
     <div class="field">
       <label>VLC arguments (e.g. --qt-minimal-view for a minimal window)</label>
       <input class="cfg-input" data-cfg="vlcArgs" value="${esc(args)}" placeholder="--qt-minimal-view" />
+    </div>
+    <div class="field">
+      <label>HDR match keywords — channels whose name/category contains one of these get the brighten args below (comma-separated)</label>
+      <input class="cfg-input" data-cfg="hdrKeywords" value="${esc(hdrKeywords)}" placeholder="HDR, HDR10, DV, Dolby Vision" />
+    </div>
+    <div class="field">
+      <label>HDR extra VLC args — added only for matched HDR channels to counter dimness</label>
+      <input class="cfg-input" data-cfg="hdrVlcArgs" value="${esc(hdrVlcArgs)}" placeholder="--video-filter=adjust --brightness=1.2 --gamma=1.4" />
     </div>
     ${containerField(container)}`;
 }
