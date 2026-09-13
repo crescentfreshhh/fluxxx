@@ -186,7 +186,9 @@ async function openInVlc(): Promise<void> {
   if (!opts) return;
   try {
     const vlc = (await api.getSetting("vlc_path")) || DEFAULT_VLC;
-    const argsStr = (await api.getSetting("vlc_args")) ?? "--qt-minimal-view";
+    const argsStr =
+      (await api.getSetting("vlc_args")) ??
+      "--one-instance --qt-minimal-view --network-caching=5000 --live-caching=5000";
     const argv = argsStr.split(/\s+/).filter(Boolean);
     const keywords = ((await api.getSetting("hdr_keywords")) ?? DEFAULT_HDR_KEYWORDS).split(",");
     if (isHdr(opts.name, keywords)) {

@@ -26,7 +26,13 @@ export interface PlaybackConfig {
 }
 
 export const DEFAULT_VLC = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe";
-export const DEFAULT_VLC_ARGS = "--qt-minimal-view";
+// --one-instance: reuse one VLC window when surfing (avoids stacking provider
+// connections → max-connection drops); caching absorbs jitter.
+export const DEFAULT_VLC_ARGS =
+  "--one-instance --qt-minimal-view --network-caching=5000 --live-caching=5000";
+// Previous default — auto-upgraded to DEFAULT_VLC_ARGS so existing installs get
+// the reliability fix without clobbering genuinely custom args.
+const PREV_DEFAULT_VLC_ARGS = "--qt-minimal-view";
 export const DEFAULT_HDR_KEYWORDS = "HDR, HDR10, DV, Dolby Vision";
 export const DEFAULT_HDR_VLC_ARGS =
   "--video-filter=adjust --brightness=1.2 --gamma=1.4 --contrast=1.05 --saturation=1.35";
@@ -38,7 +44,7 @@ let config: PlaybackConfig = {
   vlcPath: DEFAULT_VLC,
   vlcArgs: DEFAULT_VLC_ARGS,
   externalCommand: "",
-  externalContainer: "ts",
+  externalContainer: "m3u8",
   hdrKeywords: DEFAULT_HDR_KEYWORDS,
   hdrVlcArgs: DEFAULT_HDR_VLC_ARGS,
 };
@@ -56,7 +62,9 @@ export async function loadPlaybackConfig(): Promise<void> {
     ]);
   if (backend === "webview" || backend === "vlc" || backend === "external") config.backend = backend;
   if (vlcPath) config.vlcPath = vlcPath;
-  if (vlcArgs !== null && vlcArgs !== undefined) config.vlcArgs = vlcArgs;
+  // Auto-upgrade the old default to the new one; keep genuinely custom args.
+  if (vlcArgs && vlcArgs.trim() !== PREV_DEFAULT_VLC_ARGS) config.vlcArgs = vlcArgs;
+  else config.vlcArgs = DEFAULT_VLC_ARGS;
   if (externalCommand) config.externalCommand = externalCommand;
   if (container === "ts" || container === "m3u8") config.externalContainer = container;
   if (hdrKeywords !== null && hdrKeywords !== undefined) config.hdrKeywords = hdrKeywords;
