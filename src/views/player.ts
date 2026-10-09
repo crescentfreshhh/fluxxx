@@ -12,8 +12,10 @@ const DEFAULT_VLC = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe";
 const DEFAULT_HDR_KEYWORDS = "HDR, HDR10, DV, Dolby Vision";
 const DEFAULT_HDR_VLC_ARGS =
   "--video-filter=adjust --brightness=1.2 --gamma=1.4 --contrast=1.05 --saturation=1.35";
-const MAX_NET_RETRIES = 3;
-const LOG_MAX = 16;
+// Up to 5 automatic reopen attempts for a live stream that drops, with
+// exponential backoff between them (see backoffMs).
+const MAX_RECONNECTS = 5;
+const LOG_MAX = 32;
 
 let HlsMod: any = null;
 let overlay: HTMLElement | null = null;
@@ -24,7 +26,8 @@ let statsTimer: number | undefined;
 
 let opts: PlayOpts | null = null;
 let currentUrl = "";
-let netRetries = 0;
+let reconnects = 0;
+let reconnectTimer: number | undefined;
 let mediaRecovered = false;
 let fragCount = 0;
 let lastError = "—";
@@ -44,7 +47,7 @@ export interface PlayOpts {
 export async function openPlayer(o: PlayOpts): Promise<void> {
   close();
   opts = o;
-  netRetries = 0;
+  reconnects = 0;
   mediaRecovered = false;
   fragCount = 0;
   lastError = "—";
@@ -69,6 +72,7 @@ export async function openPlayer(o: PlayOpts): Promise<void> {
   document.body.appendChild(overlay);
 
   const video = overlay.querySelector<HTMLVideoElement>(".player-video")!;
+  attachStateLogging(video);
   overlay.querySelectorAll<HTMLButtonElement>("[data-act]").forEach((b) =>
     b.addEventListener("click", () => onAction(b.dataset.act!)),
   );
@@ -124,6 +128,12 @@ async function attach(video: HTMLVideoElement, url: string): Promise<void> {
         setStatus("Live");
         addLog("first segment buffered — playing");
       }
+      // Healthy playback resumed — clear the reconnect budget so a later drop
+      // gets its full allowance again.
+      if (reconnects > 0) {
+        addLog(`recovered — reconnect counter reset (was ${reconnects})`);
+        reconnects = 0;
+      }
     });
 
     hls.on(Hls.Events.ERROR, (_e: unknown, data: any) => {
@@ -140,28 +150,16 @@ async function attach(video: HTMLVideoElement, url: string): Promise<void> {
         );
         return;
       }
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        if (netRetries < MAX_NET_RETRIES) {
-          netRetries += 1;
-          setStatus(`Reconnecting… (${netRetries}/${MAX_NET_RETRIES})`);
-          hls.startLoad();
-        } else {
-          showMessage(
-            "Couldn't load the stream after several tries — the server may be unreachable, " +
-              "the credentials/port may be off, or the format isn't HLS. Try “Open in VLC”.",
-            true,
-          );
-        }
-      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-        if (!mediaRecovered) {
-          mediaRecovered = true;
-          setStatus("Recovering…");
-          hls.recoverMediaError();
-        } else {
-          showMessage("Playback failed (media error). Try “Open in VLC”.", true);
-        }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecovered) {
+        // Cheap in-place recovery first; only escalate to a full reopen if it
+        // doesn't take.
+        mediaRecovered = true;
+        setStatus("Recovering…");
+        hls.recoverMediaError();
       } else {
-        showMessage("This stream couldn't be played in-app. Try “Open in VLC”.", true);
+        // Network error, exhausted media recovery, or other fatal: reopen the
+        // same URL from scratch, with backoff, up to MAX_RECONNECTS times.
+        scheduleReopen(lastError);
       }
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -170,6 +168,74 @@ async function attach(video: HTMLVideoElement, url: string): Promise<void> {
     void video.play().catch(() => {});
   } else {
     showMessage("HLS playback isn't supported in this webview.");
+  }
+}
+
+// --- reconnect & state logging ----------------------------------------------
+
+/** Log every meaningful <video> state transition with a timestamp, and treat a
+ * live stream that quietly ends/empties as a drop to auto-reopen. */
+function attachStateLogging(video: HTMLVideoElement): void {
+  const simple = ["loadstart", "playing", "pause", "waiting", "stalled", "suspend", "emptied"];
+  simple.forEach((ev) => video.addEventListener(ev, () => addLog(`video: ${ev}`)));
+  video.addEventListener("ended", () => {
+    // A live stream should never "end" on its own — treat it as a drop.
+    addLog("video: ended (live stream stopped)");
+    scheduleReopen("video ended");
+  });
+  video.addEventListener("error", () => {
+    const err = video.error;
+    addLog(`video: error${err ? ` code=${err.code}` : ""}`);
+  });
+}
+
+/** Exponential backoff for reopen attempt n (1-based): 1s, 2s, 4s, 8s, 15s. */
+function backoffMs(attempt: number): number {
+  return Math.min(1000 * 2 ** (attempt - 1), 15000);
+}
+
+/** Schedule a full reopen of the current URL after a backoff delay, unless the
+ * attempt budget is spent. Safe to call repeatedly — only one is ever pending. */
+function scheduleReopen(reason: string): void {
+  if (!opts || !currentUrl) return;
+  if (reconnectTimer !== undefined) return; // a reopen is already pending
+  if (reconnects >= MAX_RECONNECTS) {
+    showMessage(
+      "The stream stopped and couldn't be re-established after several attempts — the " +
+        "provider may have dropped the connection or hit a connection limit. Try “Open in VLC”.",
+      true,
+    );
+    return;
+  }
+  reconnects += 1;
+  const delay = backoffMs(reconnects);
+  setStatus(`Reconnecting… (${reconnects}/${MAX_RECONNECTS})`);
+  addLog(`reopen scheduled in ${delay}ms — attempt ${reconnects}/${MAX_RECONNECTS} (${reason})`);
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = undefined;
+    void reopen();
+  }, delay);
+}
+
+/** Tear down the current hls.js instance and re-attach the same URL. */
+async function reopen(): Promise<void> {
+  const video = overlay?.querySelector<HTMLVideoElement>(".player-video");
+  if (!video || !opts || !currentUrl) return;
+  addLog("reopening stream");
+  mediaRecovered = false;
+  if (hls) {
+    try {
+      hls.destroy();
+    } catch {
+      /* ignore */
+    }
+    hls = null;
+  }
+  try {
+    await attach(video, currentUrl);
+  } catch (e) {
+    addLog(`reopen failed: ${e}`);
+    scheduleReopen("reopen error");
   }
 }
 
@@ -265,7 +331,7 @@ function updateDiag(): void {
     `Level      : ${level}`,
     `Buffered   : ${buffered}`,
     `Segments   : ${fragCount}`,
-    `Retries    : ${netRetries}/${MAX_NET_RETRIES}`,
+    `Reconnects : ${reconnects}/${MAX_RECONNECTS}`,
     `Last error : ${lastError}`,
     `———————————————— events ————————————————`,
     ...log,
@@ -319,6 +385,10 @@ export function close(): void {
   if (statsTimer) {
     window.clearInterval(statsTimer);
     statsTimer = undefined;
+  }
+  if (reconnectTimer !== undefined) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
   }
   if (hls) {
     try {

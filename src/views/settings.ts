@@ -33,7 +33,7 @@ function draw(borderless: boolean, onTop: boolean): void {
           ${backendOption("external", "Custom external", "Launch any player (mpv, PotPlayer, …) by path.", cfg.backend)}
         </div>
 
-        ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.vlcArgs, cfg.hdrKeywords, cfg.hdrVlcArgs, cfg.externalContainer) : ""}
+        ${cfg.backend === "vlc" ? vlcFields(cfg.vlcPath, cfg.vlcArgs, cfg.hdrKeywords, cfg.hdrVlcArgs, cfg.httpUserAgent, cfg.externalContainer) : ""}
         ${cfg.backend === "external" ? externalFields(cfg.externalCommand, cfg.externalContainer) : ""}
       </section>
 
@@ -90,6 +90,7 @@ function vlcFields(
   args: string,
   hdrKeywords: string,
   hdrVlcArgs: string,
+  httpUserAgent: string,
   container: string,
 ): string {
   return `
@@ -100,6 +101,10 @@ function vlcFields(
     <div class="field">
       <label>VLC arguments (e.g. --qt-minimal-view for a minimal window)</label>
       <input class="cfg-input" data-cfg="vlcArgs" value="${esc(args)}" placeholder="--qt-minimal-view" />
+    </div>
+    <div class="field">
+      <label>HTTP User-Agent — sent to the provider when fetching the stream (leave blank for VLC's default)</label>
+      <input class="cfg-input" data-cfg="httpUserAgent" value="${esc(httpUserAgent)}" placeholder="VLC/3.0.20 LibVLC/3.0.20" />
     </div>
     <div class="field">
       <label>HDR match keywords — channels whose name/category contains one of these get the brighten args below (comma-separated)</label>

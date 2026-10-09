@@ -547,15 +547,47 @@ pub fn stream_url(
     ))
 }
 
+/// Milliseconds since the Unix epoch, for log timestamps (dependency-free).
+fn epoch_millis() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+/// Hide the `/live/<user>/<pass>/` credential segments of an Xtream stream URL
+/// before it goes to a log. Non-URL args pass through unchanged.
+fn mask_url(s: &str) -> String {
+    let marker = "/live/";
+    if let Some(i) = s.find(marker) {
+        let (head, rest) = s.split_at(i + marker.len());
+        let parts: Vec<&str> = rest.splitn(3, '/').collect();
+        if parts.len() == 3 {
+            return format!("{head}***/***/{}", parts[2]);
+        }
+    }
+    s.to_string()
+}
+
 /// Launch an external player (e.g. VLC, mpv) with the given arguments. The
 /// command/path is chosen by the user in Settings; this is their machine and
 /// their configuration, so we spawn it as given and return promptly.
+///
+/// Each spawn is logged (timestamp + masked args + PID) so a dropped stream can
+/// be correlated with exactly when and how the player was launched.
 #[tauri::command]
 pub fn launch_external(command: String, args: Vec<String>) -> CmdResult<()> {
-    std::process::Command::new(&command)
+    let ts = epoch_millis();
+    let masked: Vec<String> = args.iter().map(|a| mask_url(a)).collect();
+    eprintln!("[fluxxx playback {ts}] OPEN launch_external command={command:?} args={masked:?}");
+    let child = std::process::Command::new(&command)
         .args(&args)
         .spawn()
-        .map_err(|e| format!("Failed to launch '{command}': {e}"))?;
+        .map_err(|e| {
+            eprintln!("[fluxxx playback {ts}] OPEN failed command={command:?}: {e}");
+            format!("Failed to launch '{command}': {e}")
+        })?;
+    eprintln!("[fluxxx playback {ts}] OPEN ok command={command:?} pid={}", child.id());
     Ok(())
 }
 
