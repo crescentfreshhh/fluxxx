@@ -121,23 +121,32 @@ function maskUrl(url: string): string {
 }
 
 /** Ensure the live-reliability VLC options are present without clobbering the
- * user's own args: guarantee --http-reconnect, and raise --network-caching to at
- * least MIN_LIVE_NET_CACHING ms (VLC's own default of ~1000 ms is a frequent cause
- * of streams dropping after a minute or two). */
+ * user's own args: guarantee --http-reconnect, and raise both --network-caching
+ * and --live-caching to at least MIN_LIVE_NET_CACHING ms (VLC's own defaults of
+ * ~1000 ms are a frequent cause of streams dropping after a minute or two). */
 export function ensureLiveVlcOptions(tokens: string[]): string[] {
-  const out = [...tokens];
+  let out = [...tokens];
   if (!out.some((t) => t === "--http-reconnect" || t.startsWith("--http-reconnect="))) {
     out.push("--http-reconnect");
   }
-  const idx = out.findIndex((t) => t.startsWith("--network-caching"));
+  out = ensureMinCaching(out, "--network-caching");
+  out = ensureMinCaching(out, "--live-caching");
+  return out;
+}
+
+/** Ensure a `<flag>=<ms>` caching option is present and at least the live
+ * minimum; adds it if missing, raises it if set lower, leaves higher values. */
+function ensureMinCaching(tokens: string[], flag: string): string[] {
+  const out = [...tokens];
+  const idx = out.findIndex((t) => t.startsWith(flag));
   if (idx === -1) {
-    out.push(`--network-caching=${MIN_LIVE_NET_CACHING}`);
-  } else {
-    const m = /--network-caching=(\d+)/.exec(out[idx]);
-    const val = m ? parseInt(m[1], 10) : NaN;
-    if (!Number.isFinite(val) || val < MIN_LIVE_NET_CACHING) {
-      out[idx] = `--network-caching=${MIN_LIVE_NET_CACHING}`;
-    }
+    out.push(`${flag}=${MIN_LIVE_NET_CACHING}`);
+    return out;
+  }
+  const m = new RegExp(`${flag}=(\\d+)`).exec(out[idx]);
+  const val = m ? parseInt(m[1], 10) : NaN;
+  if (!Number.isFinite(val) || val < MIN_LIVE_NET_CACHING) {
+    out[idx] = `${flag}=${MIN_LIVE_NET_CACHING}`;
   }
   return out;
 }

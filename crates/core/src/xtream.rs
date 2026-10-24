@@ -20,6 +20,10 @@ pub struct AuthResult {
     pub authenticated: bool,
     pub status: Option<String>,
     pub expires_at: Option<i64>,
+    /// Max concurrent connections the account allows (from `user_info`).
+    pub max_connections: Option<i64>,
+    /// Connections currently in use on the account (from `user_info`).
+    pub active_connections: Option<i64>,
 }
 
 /// A category row from `action=get_live_categories`.
@@ -128,6 +132,8 @@ pub fn parse_auth(json: &str) -> Result<AuthResult, ParseError> {
         auth: JsonNum,
         status: Option<String>,
         exp_date: Option<StringOrNum>,
+        max_connections: Option<StringOrNum>,
+        active_cons: Option<StringOrNum>,
     }
     let root: Root = serde_json::from_str(json).map_err(ParseError::from)?;
     let ui = root.user_info.ok_or(ParseError::MissingField("user_info"))?;
@@ -135,6 +141,8 @@ pub fn parse_auth(json: &str) -> Result<AuthResult, ParseError> {
         authenticated: ui.auth.0 == 1 || matches!(ui.status.as_deref(), Some("Active")),
         status: ui.status,
         expires_at: ui.exp_date.and_then(|e| e.as_i64()),
+        max_connections: ui.max_connections.and_then(|e| e.as_i64()),
+        active_connections: ui.active_cons.and_then(|e| e.as_i64()),
     })
 }
 
@@ -437,5 +445,17 @@ mod tests {
         assert!(a.authenticated);
         assert_eq!(a.status.as_deref(), Some("Active"));
         assert_eq!(a.expires_at, Some(1800000000));
+        // Absent connection fields parse as None.
+        assert_eq!(a.max_connections, None);
+        assert_eq!(a.active_connections, None);
+    }
+
+    #[test]
+    fn parses_auth_connection_counts() {
+        // max_connections as a string (common), active_cons as a number.
+        let json = r#"{"user_info":{"auth":1,"status":"Active","max_connections":"2","active_cons":1}}"#;
+        let a = parse_auth(json).unwrap();
+        assert_eq!(a.max_connections, Some(2));
+        assert_eq!(a.active_connections, Some(1));
     }
 }

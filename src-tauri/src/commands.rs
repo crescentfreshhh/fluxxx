@@ -76,6 +76,10 @@ pub struct TestResult {
     pub ok: bool,
     pub status: Option<String>,
     pub message: String,
+    /// Max concurrent connections the account allows, if the panel reports it.
+    pub max_connections: Option<i64>,
+    /// Connections currently in use on the account, if the panel reports it.
+    pub active_connections: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -211,16 +215,34 @@ pub async fn test_connection(
             ok: auth.authenticated,
             status: auth.status.clone(),
             message: if auth.authenticated {
-                "Connected".to_string()
+                match conns_summary(auth.active_connections, auth.max_connections) {
+                    Some(c) => format!("Connected — {c}"),
+                    None => "Connected".to_string(),
+                }
             } else {
                 format!("Rejected{}", auth.status.map(|s| format!(" ({s})")).unwrap_or_default())
             },
+            max_connections: auth.max_connections,
+            active_connections: auth.active_connections,
         }),
         Err(e) => Ok(TestResult {
             ok: false,
             status: None,
             message: e.to_string(),
+            max_connections: None,
+            active_connections: None,
         }),
+    }
+}
+
+/// Human-readable connection usage, e.g. "1/2 connections in use". Returns None
+/// when the panel reports neither figure.
+fn conns_summary(active: Option<i64>, max: Option<i64>) -> Option<String> {
+    match (active, max) {
+        (Some(a), Some(m)) => Some(format!("{a}/{m} connections in use")),
+        (Some(a), None) => Some(format!("{a} connection(s) in use")),
+        (None, Some(m)) => Some(format!("max {m} connection(s)")),
+        (None, None) => None,
     }
 }
 

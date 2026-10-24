@@ -30,6 +30,8 @@ export interface TestResult {
   ok: boolean;
   status: string | null;
   message: string;
+  max_connections: number | null;
+  active_connections: number | null;
 }
 
 export interface SyncResult {
